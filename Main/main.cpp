@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <iostream>
 
+
 #include "glew.h"
 #include "mesh.h"
 #include "glut.h"
@@ -11,12 +12,13 @@
 #include "lights.h"
 #include "view.h"
 #include "scene.h"
+#include "ModelInfo.h"
 #include <vector>
 #include <string>
 #include <cmath>
 #include <fstream>
 
-#define SHADOW_RATE 10
+
 #define MIPMAP
 
 using namespace std;
@@ -25,14 +27,14 @@ vector<mesh*> object;
 views* viewing;
 lights* lighting;
 scenes* Scene;
+vector<ModelInfo*> m_infos;
 int windowSize[2];
 int startX, startY;
 int oldX, oldY;
 GLdouble rotX, rotY;
 
-int compute_shadow = true;
-int render_shadow = true;
-int render_line = true;
+
+int render_line = false;
 
 GLdouble left_l, right_l, back_l, front_l;
 GLdouble left_x=0;
@@ -51,6 +53,14 @@ double angle_x, angle_z;
 
 GLuint v, f, p;
 
+int thread_count;
+pthread_t* threads_ptr;
+sem_t* semaphores;
+sem_t master_sem;
+pthread_mutex_t mutex;
+
+vector<int> job_list;
+
 void light(bool);
 void display();
 void keyboard(unsigned char, int, int);
@@ -59,10 +69,12 @@ void motion(int, int);
 
 void reshape(GLsizei , GLsizei );
 
+void* monitor(void *);
+
 int main(int argc, char** argv)
 {
-	
-    cout << omp_get_num_procs() << endl;
+    
+	thread_count = 3;//omp_get_num_procs()-1;
 	viewing = new views("assignment3.view");
 	lighting = new lights("assignment3.light");
 	Scene = new scenes("scene1.scene");
@@ -72,7 +84,17 @@ int main(int argc, char** argv)
 		
 		mesh* temp = new mesh(model_name);
 		object.push_back(temp);
+        m_infos.push_back(new ModelInfo(model_name,temp));
 	}
+
+    pthread_mutex_init(&mutex, NULL);
+    threads_ptr = new pthread_t[thread_count];
+    semaphores = new sem_t[thread_count];
+    for(int i=0;i<thread_count;i++){
+        pthread_create(&threads_ptr[i],NULL,monitor,(void*) i);
+        sem_init(&semaphores[i], 0, 0);
+    }
+    sem_init(&master_sem,0,0);
 	
 	camera_eye[0]=viewing->eye[0];	camera_eye[1]=viewing->eye[1];	camera_eye[2]=viewing->eye[2];
 	camera_vat[0]=viewing->vat[0];	camera_vat[1]=viewing->vat[1];	camera_vat[2]=viewing->vat[2];
@@ -94,13 +116,14 @@ int main(int argc, char** argv)
 	glewInit();
 
 	
+
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
 	glutKeyboardFunc(keyboard);
 	glutMouseFunc(mouse);
 	glutMotionFunc(motion);
+
 	glutMainLoop();
-	
 	return 0;
 }
 
@@ -143,6 +166,21 @@ void light(bool only_ambient)
 
 void display()
 {
+    // reset light triangle
+    for(int i=0;i<m_infos.size();i++){
+        job_list.push_back(i);
+    }
+    for(int i=0;i<thread_count;i++){
+        sem_post(&semaphores[i]);
+    }
+    for(int i=0;i<m_infos.size();i++){
+        sem_wait(&master_sem);
+    }
+
+    
+    
+
+    //cout << "run with" << omp_get_thread_num() << endl;
 	// clear the buffer
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);      //清除用color
 	glClearDepth(1.0f);                        // Depth Buffer (就是z buffer) Setup
@@ -225,186 +263,104 @@ void display()
 	glClear(GL_STENCIL_BUFFER_BIT);
 	glEnable(GL_CULL_FACE); // enable culling
     
+
 	// front shadowing (mark the places that should be in the shadow)
 	glCullFace(GL_BACK); // cull back faces
 	glStencilFunc(GL_ALWAYS,1,~0);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_INCR); // meet front face -> stencil value + 1
-	for(unsigned int x=0;x<(Scene->scene_model.size());x++){
-		
+	
+    
+    
+    
+    for(int x=0;x<(Scene->scene_model.size());x++){
+        ModelInfo& Model = *m_infos[x];
 		int lastMaterial = -1;
 		glPushMatrix();
-			glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
-			glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
-			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
+		glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
+		glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
+		glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
 			
-
-		for(size_t i=0;i < object[x]->fTotal;++i)
+        
+        for(int i=0;i < Model.face_size;++i)
 		{
-            GLfloat* tri[3]; // bottom triangle
-            GLfloat LtoV[3]; // light to vertex
-            GLfloat AtoL[3]; // vertex A to light
-			GLfloat AtoB[3]; // vertex A to vertex B
-			GLfloat AtoC[3]; // vertex A to vertex C
-            GLfloat ABcrossAC[3];
-            GLfloat dot=0;
-			if(compute_shadow){
-			
-			for(size_t j=0;j<3;++j){
-				tri[j]= new GLfloat[3];
-			}
-
-			
-			
-			for (size_t j=0;j<3;++j)
-			{	
-				for(size_t k=0;k<3;++k) LtoV[k] = object[x]->vList[object[x]->faceList[i][j].v].ptr[k] - light_pos[k];
-				for(size_t k=0;k<3;++k)	tri[j][k] = object[x]->vList[object[x]->faceList[i][j].v].ptr[k] + LtoV[k]*2;	
-			}
-
-			// judge whether the polygon faces the light (if light-faceing->draw shadow polygons)
-			
-			for(size_t k=0; k<3;++k){
-				AtoL[k] = light_pos[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-				AtoB[k] = object[x]->vList[object[x]->faceList[i][1].v].ptr[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-				AtoC[k] = object[x]->vList[object[x]->faceList[i][2].v].ptr[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-			}
-
-			
-			ABcrossAC[0] = AtoB[1]*AtoC[2] - AtoB[2]*AtoC[1];
-			ABcrossAC[1] = AtoB[2]*AtoC[0] - AtoB[0]*AtoC[2];
-			ABcrossAC[2] = AtoB[0]*AtoC[1] - AtoB[1]*AtoC[0];
-
-			
-
-			dot = AtoL[0]*ABcrossAC[0] + AtoL[1]*ABcrossAC[1] + AtoL[2]*ABcrossAC[2];
-            }
-			// draw shadow polygons
-            if (render_shadow){
-			if(dot>0){
-				//glBegin(GL_TRIANGLES); // draw bottom triangle
-				//for (size_t j=0;j<3;++j)
-				//{	
-				//	glNormal3fv(object[x]->nList[object[x]->faceList[i][j].n].ptr);
-				//	glVertex3f(tri[j][0], tri[j][1], tri[j][2]);
-				//}
-				//glEnd();
+            TriangleInfo& triangle = Model.btm_tri[i];
+            auto tri = triangle.coor;
+            if(triangle.dot>0){
 
 				glBegin(GL_POLYGON); // draw shadow polygon 1
 					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
 					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][1].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][0].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
 				glEnd();
 			
 				glBegin(GL_POLYGON); // draw shadow polygon 2
 					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
 					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][2].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][1].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
 				glEnd();
 
 				glBegin(GL_POLYGON); // draw shadow polygon 3
 					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
 					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][0].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][2].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
 				glEnd();
-            }}
+            }
 		}
 
 		glPopMatrix();	
 		
 	}
     
+    
 	// back shadowing(mark the places that shouldn't be in shadow)
     
 	glCullFace(GL_FRONT); // cull front faces
 	glStencilFunc(GL_ALWAYS,1,~0);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_DECR); // if meet back faces -> stencil value-1
-	
-    for(unsigned int x=0;x<(Scene->scene_model.size());x++){
-		
+    
+    for(int x=0;x<(Scene->scene_model.size());x++){
+        ModelInfo& Model = *m_infos[x];
 		int lastMaterial = -1;
 		glPushMatrix();
-			glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
-			glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
-			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
+		glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
+		glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
+		glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
 			
-
-		for(size_t i=0;i < object[x]->fTotal;++i)
+        
+        for(int i=0;i < Model.face_size;++i)
 		{
-				
-			GLfloat* tri[3]; // bottom triangle
-            GLfloat LtoV[3]; // light to vertex
-            GLfloat AtoL[3]; // vertex to light
-			GLfloat AtoB[3];
-			GLfloat AtoC[3];
-            GLfloat ABcrossAC[3];
-            GLfloat dot=0;
+            TriangleInfo& triangle = Model.btm_tri[i];
+            auto tri = triangle.coor;
+            if(triangle.dot>0){
 
-            if(compute_shadow){
-			for(size_t j=0;j<3;++j){
-				tri[j]= new GLfloat[3];
-			}
-
-			
-			for (size_t j=0;j<3;++j)
-			{	
-				for(size_t k=0;k<3;++k) LtoV[k] = object[x]->vList[object[x]->faceList[i][j].v].ptr[k] - light_pos[k];
-				for(size_t k=0;k<3;++k)	tri[j][k] = object[x]->vList[object[x]->faceList[i][j].v].ptr[k] + LtoV[k]*SHADOW_RATE;
-				
-			}
-
-			
-			//glBegin(GL_TRIANGLES); // draw bottom triangle
-			//for (size_t j=0;j<3;++j)
-			//{	
-			//	glNormal3fv(object[x]->nList[object[x]->faceList[i][j].n].ptr);
-			//	glVertex3f(tri[j][0], tri[j][1], tri[j][2]);
-			//}
-			//glEnd();
-			
-			for(size_t k=0; k<3;++k){
-				AtoL[k] = light_pos[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-				AtoB[k] = object[x]->vList[object[x]->faceList[i][1].v].ptr[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-				AtoC[k] = object[x]->vList[object[x]->faceList[i][2].v].ptr[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-			}
-
-			
-			ABcrossAC[0] = AtoB[1]*AtoC[2] - AtoB[2]*AtoC[1];
-			ABcrossAC[1] = AtoB[2]*AtoC[0] - AtoB[0]*AtoC[2];
-			ABcrossAC[2] = AtoB[0]*AtoC[1] - AtoB[1]*AtoC[0];
-
-			
-
-			dot = AtoL[0]*ABcrossAC[0] + AtoL[1]*ABcrossAC[1] + AtoL[2]*ABcrossAC[2];
-
-            }
-            if(render_shadow){
-			if(dot>0){
 				glBegin(GL_POLYGON); // draw shadow polygon 1
 					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
 					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][1].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][0].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
 				glEnd();
 			
 				glBegin(GL_POLYGON); // draw shadow polygon 2
 					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
 					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][2].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][1].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
 				glEnd();
 
 				glBegin(GL_POLYGON); // draw shadow polygon 3
 					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
 					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][0].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][2].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
+					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
 				glEnd();
-			}
             }
 		}
+
+		glPopMatrix();	
+		
 	}
     
 	glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE); // color buffer on
@@ -415,85 +371,60 @@ void display()
     // draw the unshadowed part
 	light(0); // all lights on
 
+    
     if(render_line){
-	// line_loop_test
-	glCullFace(GL_FRONT);
-	glStencilFunc(GL_ALWAYS,1,~0);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
-	for(unsigned int x=0;x<(Scene->scene_model.size());x++){
+	    // line_loop_test
+	    glCullFace(GL_FRONT);
+	    glStencilFunc(GL_ALWAYS,1,~0);
+	    glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
+        for(int x=0;x<(Scene->scene_model.size());x++){
+            ModelInfo& Model = *m_infos[x];
+		    int lastMaterial = -1;
+		    glPushMatrix();
+		    glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
+		    glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
+		    glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
+			
+        
+            for(int i=0;i < Model.face_size;++i)
+		    {
+                TriangleInfo& triangle = Model.btm_tri[i];
+                auto tri = triangle.coor;
+                if(triangle.dot>0){
+
+				    glBegin(GL_LINE_LOOP); // draw shadow polygon 1
+					    glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
+					    glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
+					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
+					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
+				    glEnd();
+			
+				    glBegin(GL_LINE_LOOP); // draw shadow polygon 2
+					    glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
+					    glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
+					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
+					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
+				    glEnd();
+
+				    glBegin(GL_LINE_LOOP); // draw shadow polygon 3
+					    glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
+					    glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
+					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
+					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
+				    glEnd();
+                }
+		    }
+
+		    glPopMatrix();	
 		
-		int lastMaterial = -1;
-		glPushMatrix();
-			glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
-			glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
-			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
-			
-
-		for(size_t i=0;i < object[x]->fTotal;++i)
-		{
-				
-			GLfloat* tri[3]; // bottom triangle
-			for(size_t j=0;j<3;++j){
-				tri[j]= new GLfloat[3];
-			}
-
-			GLfloat LtoV[3]; // light to vertex
-			for (size_t j=0;j<3;++j)
-			{	
-				for(size_t k=0;k<3;++k) LtoV[k] = object[x]->vList[object[x]->faceList[i][j].v].ptr[k] - light_pos[k];
-				for(size_t k=0;k<3;++k)	tri[j][k] = object[x]->vList[object[x]->faceList[i][j].v].ptr[k] + LtoV[k]*SHADOW_RATE;
-				
-			}
-
-			GLfloat AtoL[3]; // vertex to light
-			GLfloat AtoB[3];
-			GLfloat AtoC[3];
-			for(size_t k=0; k<3;++k){
-				AtoL[k] = light_pos[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-				AtoB[k] = object[x]->vList[object[x]->faceList[i][1].v].ptr[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-				AtoC[k] = object[x]->vList[object[x]->faceList[i][2].v].ptr[k] - object[x]->vList[object[x]->faceList[i][0].v].ptr[k];
-			}
-
-			GLfloat ABcrossAC[3];
-			ABcrossAC[0] = AtoB[1]*AtoC[2] - AtoB[2]*AtoC[1];
-			ABcrossAC[1] = AtoB[2]*AtoC[0] - AtoB[0]*AtoC[2];
-			ABcrossAC[2] = AtoB[0]*AtoC[1] - AtoB[1]*AtoC[0];
-
-			GLfloat dot;
-
-			dot = AtoL[0]*ABcrossAC[0] + AtoL[1]*ABcrossAC[1] + AtoL[2]*ABcrossAC[2];
-
-
-			if(dot>0){
-				glBegin(GL_LINE_LOOP); // draw shadow polygon 1
-					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][1].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][0].v].ptr);	
-				glEnd();
-			
-				glBegin(GL_LINE_LOOP); // draw shadow polygon 2
-					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][2].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][1].v].ptr);	
-				glEnd();
-
-				glBegin(GL_LINE_LOOP); // draw shadow polygon 3
-					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][0].v].ptr);	
-					glVertex3fv(object[x]->vList[object[x]->faceList[i][2].v].ptr);	
-				glEnd();
-			}
-		}
-	}
+	    }
     }
 	
 
 	glStencilFunc(GL_EQUAL, 0, ~0); // if stencil value = 0, draw the polygon with new lights
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-	for(unsigned int x=0;x<(Scene->scene_model.size());x++){
+    int m_size = (Scene->scene_model.size());
+	for(unsigned int x=0;x<m_size;x++){
 		int lastMaterial = -1;
 		glPushMatrix();
 			glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
@@ -529,6 +460,7 @@ void display()
 		glPopMatrix();	
 		
 	}	
+    
 	glDisable(GL_STENCIL_TEST);
 	glutSwapBuffers();
 }
@@ -544,50 +476,20 @@ void keyboard(unsigned char key, int x, int y)
 	
 	//printf("you press the key %c \n", key);
 	//printf("the mouse is on %lf %lf \n", x, y);
-	/*GLdouble diff[3];
-	diff[0] = camera_vat[0]-camera_eye[0];
-	diff[1] = camera_vat[1]-camera_eye[1]
-	diff[2] = camera_vat[2]-camera_eye[2];*/
 	if(key=='s'){                          // backward
-		/*camera_eye[0]=camera_eye[0]-diff[0]/20;
-		camera_eye[1]=camera_eye[1]-diff[1]/20;
-		camera_eye[2]=camera_eye[2]-diff[2]/20;*/
+
 		back_x = back_x+step/20;
 	}
 	else if(key=='w'){                     // forward
-		/*camera_eye[0]=camera_eye[0]+diff[0]/20;
-		camera_eye[1]=camera_eye[1]+diff[1]/20;
-		camera_eye[2]=camera_eye[2]+diff[2]/20;*/
+
 		front_x = front_x+step/20;
 	}
 	else if(key=='a'){                     // left
-		/*GLdouble cross[3];
-		cross[0] = camera_vup[1] * diff[2] - diff[1] * camera_vup[2];
-		cross[1] = -camera_vup[0] * diff[2] + diff[0] * camera_vup[2];
-		cross[2] = camera_vup[0] * diff[1] - diff[0] * camera_vup[1];
-		GLdouble length = sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
-
-		camera_eye[0]=camera_eye[0]+cross[0]/20; // eye and vat shift together
-		camera_eye[1]=camera_eye[1]+cross[1]/20;
-		camera_eye[2]=camera_eye[2]+cross[2]/20;
-		camera_vat[0]=camera_vat[0]+cross[0]/20;
-		camera_vat[1]=camera_vat[1]+cross[1]/20;
-		camera_vat[2]=camera_vat[2]+cross[2]/20;*/
+	
 		left_x = left_x+step/30;
 	}
 	else if(key=='d'){                    // right
-		/*GLdouble cross[3];
-		cross[0] = camera_vup[1] * diff[2] - diff[1] * camera_vup[2];
-		cross[1] = -camera_vup[0] * diff[2] + diff[0] * camera_vup[2];
-		cross[2] = camera_vup[0] * diff[1] - diff[0] * camera_vup[1];
-		GLdouble length = sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
 
-		camera_eye[0]=camera_eye[0]-cross[0]/20;
-		camera_eye[1]=camera_eye[1]-cross[1]/20;
-		camera_eye[2]=camera_eye[2]-cross[2]/20;
-		camera_vat[0]=camera_vat[0]-cross[0]/20;
-		camera_vat[1]=camera_vat[1]-cross[1]/20;
-		camera_vat[2]=camera_vat[2]-cross[2]/20;*/
 		right_x = right_x+step/30;
 	}
 	else if(key=='l'){
@@ -625,50 +527,33 @@ void motion(int x, int y){
 	oldX = x;
 	oldY = y;
 	glutPostRedisplay();
-	//if(rotX >= 360) rotX = rotX-360;
-	//if(rotY >= 360) rotY = rotY-360;
-	/*GLdouble diff[3];
-	diff[0] = camera_vat[0]-camera_eye[0];
-	diff[1] = camera_vat[1]-camera_eye[1];
-	diff[2] = camera_vat[2]-camera_eye[2];
-	GLdouble diff_unit[3];
-	diff_unit[0] = diff[0] / sqrt(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]);
-	diff_unit[1] = diff[1] / sqrt(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]);
-	diff_unit[2] = diff[2] / sqrt(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]);
-		
-	GLdouble cross[3];
-	cross[0] = camera_vup[1] * diff[2] - diff[1] * camera_vup[2];
-	cross[1] = -camera_vup[0] * diff[2] + diff[0] * camera_vup[2];
-	cross[2] = camera_vup[0] * diff[1] - diff[0] * camera_vup[1];
-	
-	GLdouble unit[3];
-	unit[0] = cross[0] / sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
-	unit[1] = cross[1] / sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
-	unit[2] = cross[2] / sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
+}
 
-	GLdouble up[3];
-	up[0] = diff[1] * unit[2] - unit[1] * diff[2];
-	up[1] = -diff[0] * unit[2] + unit[0] * diff[2];
-	up[2] = diff[0] * unit[1] - unit[0] * diff[1];
-	GLdouble up_unit[3];
-	up_unit[0] = up[0] / sqrt(up[0]*up[0] + up[1]*up[1] + up[2]*up[2]);
-	up_unit[1] = up[1] / sqrt(up[0]*up[0] + up[1]*up[1] + up[2]*up[2]);
-	up_unit[2] = up[2] / sqrt(up[0]*up[0] + up[1]*up[1] + up[2]*up[2]);
-	
-	GLdouble vX = x-oldX;
-	GLdouble vY = oldY-y;
-	GLdouble length = sqrt(vX*vX + vY*vY);
 
-	if(diff_unit[1]>=0.999){
-		camera_vat[0]=camera_vat[0] + ((-1)*unit[0]*(vX/length)*5 + up_unit[0]*(vY/length)*5)*10;
-		camera_vat[1]=camera_vat[1] + ((-1)*unit[1]*(vX/length)*5 + up_unit[1]*(vY/length)*5)*10;
-		camera_vat[2]=camera_vat[2] + ((-1)*unit[2]*(vX/length)*5 + up_unit[2]*(vY/length)*5)*10;
-	}
-	else{
-	camera_vat[0]=camera_vat[0] + (-1)*unit[0]*(vX/length)/2 + up_unit[0]*(vY/length)/2;
-	camera_vat[1]=camera_vat[1] + (-1)*unit[1]*(vX/length)/2 + up_unit[1]*(vY/length)/2;
-	camera_vat[2]=camera_vat[2] + (-1)*unit[2]*(vX/length)/2 + up_unit[2]*(vY/length)/2;
-	}
-	
-	glutPostRedisplay();*/
+void* monitor(void* v_rank){
+    int rank = (int)v_rank;
+    int job;
+    printf("Create:%d\n",rank);
+    while(true){
+        //printf("rank:%d wait for job...\n",rank);
+        sem_wait(&semaphores[rank]);
+        pthread_mutex_lock(&mutex);
+        //printf("*LOCK* Getting jobs...\n");
+        if(job_list.empty()){
+            pthread_mutex_unlock(&mutex);
+        }
+        else{
+            job = job_list.back();
+            job_list.pop_back();
+            pthread_mutex_unlock(&mutex);
+            sem_post(&semaphores[rank]);
+            m_infos[job]->GenerateBottomTriangle(light_pos,rank);
+            //printf("Finish!\n");
+            sem_post(&master_sem);
+        }
+        
+        
+    }
+    pthread_exit(NULL);
+    return NULL;
 }
