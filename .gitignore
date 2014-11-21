@@ -8,6 +8,7 @@ Execute/
 *.vcxproj
 *.filters
 *.user
+*.lib
 
 # User-specific files
 *.suo
