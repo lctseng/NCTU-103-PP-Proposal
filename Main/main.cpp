@@ -32,7 +32,7 @@ GLdouble rotX, rotY;
 
 int compute_shadow = true;
 int render_shadow = true;
-int render_line = false;
+int render_line = true;
 
 GLdouble left_l, right_l, back_l, front_l;
 GLdouble left_x=0;
@@ -90,7 +90,7 @@ int main(int argc, char** argv)
 	glutInitWindowSize(viewing->viewport[2],viewing->viewport[3]);
 	glutInitWindowPosition(0, 0);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_STENCIL);
-	glutCreateWindow("Assignment3");	
+	glutCreateWindow("Parallel_GL");	
 	glewInit();
 
 	
@@ -175,7 +175,7 @@ void display()
 				camera_vat[0], camera_vat[1], camera_vat[2],    // center
 				camera_vup[0], camera_vup[1], camera_vup[2]);   // up
 	
-	cout<<camera_eye[0]<<" "<<camera_eye[1]<<" "<<camera_eye[2]<<endl;
+	//cout<<camera_eye[0]<<" "<<camera_eye[1]<<" "<<camera_eye[2]<<endl;
 
 	//注意light位置的設定，要在gluLookAt之後
 	light(1); // only ambient on 
@@ -542,8 +542,8 @@ void reshape(GLsizei w, GLsizei h)
 void keyboard(unsigned char key, int x, int y)
 {
 	
-	printf("you press the key %c \n", key);
-	printf("the mouse is on %lf %lf \n", x, y);
+	//printf("you press the key %c \n", key);
+	//printf("the mouse is on %lf %lf \n", x, y);
 	/*GLdouble diff[3];
 	diff[0] = camera_vat[0]-camera_eye[0];
 	diff[1] = camera_vat[1]-camera_eye[1]
@@ -613,11 +613,11 @@ void mouse(int button, int state, int x, int y){
 		oldY = y;
 	}
 	else if(state == GLUT_UP){
-		printf("the mouse moves %d %d \n", x-startX,  y-startY);
+		//printf("the mouse moves %d %d \n", x-startX,  y-startY);
 	}
 }
 void motion(int x, int y){
-	printf("the mouse is moving to %d %d \n", x, y);
+	//printf("the mouse is moving to %d %d \n", x, y);
 	GLdouble vX = x-oldX;
 	GLdouble vY = y-oldY;
 	rotX = rotX + vY/10; // total amount of upward / downward motion
