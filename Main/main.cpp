@@ -61,6 +61,8 @@ pthread_mutex_t mutex;
 
 vector<int> job_list;
 
+int workload;
+
 void light(bool);
 void display();
 void keyboard(unsigned char, int, int);
@@ -73,7 +75,7 @@ void* monitor(void *);
 
 int main(int argc, char** argv)
 {
-    
+    workload = 15;
 	thread_count = 3;//omp_get_num_procs()-1;
 	viewing = new views("assignment3.view");
 	lighting = new lights("assignment3.light");
@@ -547,6 +549,7 @@ void* monitor(void* v_rank){
             job_list.pop_back();
             pthread_mutex_unlock(&mutex);
             sem_post(&semaphores[rank]);
+            for(int i=0;i<workload;i++)
             m_infos[job]->GenerateBottomTriangle(light_pos,rank);
             //printf("Finish!\n");
             sem_post(&master_sem);
