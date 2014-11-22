@@ -35,6 +35,8 @@ GLdouble rotX, rotY;
 
 
 int render_line = false;
+int model_to_line = true;
+int draw_shadow = false;
 
 GLdouble left_l, right_l, back_l, front_l;
 GLdouble left_x=0;
@@ -75,8 +77,8 @@ void* monitor(void *);
 
 int main(int argc, char** argv)
 {
-    workload = 15;
-	thread_count = 3;//omp_get_num_procs()-1;
+    workload = 1;
+	thread_count = 1;//omp_get_num_procs()-1;
 	viewing = new views("assignment3.view");
 	lighting = new lights("assignment3.light");
 	Scene = new scenes("scene1.scene");
@@ -221,14 +223,21 @@ void display()
 	light(1); // only ambient on 
 	
 	// draw ambient product
-	for(unsigned int x=0;x<(Scene->scene_model.size());x++){
+	for(int x=0;x<(Scene->scene_model.size());x++){
+        auto& model_info = *m_infos[x];
 		int lastMaterial = -1;
 		glPushMatrix();
 			glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
 			glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
 			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
 			
-
+        int gl_draw_type;
+        if(x==0||!model_to_line){
+            gl_draw_type = GL_TRIANGLES;
+        }
+        else{
+            gl_draw_type = GL_LINE_LOOP;
+        }
 		for(size_t i=0;i < object[x]->fTotal;++i)
 		{
 			// set material property if this face used different material
@@ -244,13 +253,14 @@ void display()
 				//load them once in the main function before mainloop
 				//bind them in display function here
 			}	
-			
-			glBegin(GL_TRIANGLES);
+
+			glBegin(gl_draw_type);
 			for (size_t j=0;j<3;++j)
 			{	
 				// glTexCoord2fv(object[x]->tList[object[x]->faceList[i][j].t].ptr);
 				glNormal3fv(object[x]->nList[object[x]->faceList[i][j].n].ptr);
-				glVertex3fv(object[x]->vList[object[x]->faceList[i][j].v].ptr);	
+				//glVertex3fv(object[x]->vList[object[x]->faceList[i][j].v].ptr);
+                glVertex3fv(model_info.face_draw[i].tri[j]);
 			}
 			glEnd();
 		}
@@ -275,6 +285,9 @@ void display()
     
     
     for(int x=0;x<(Scene->scene_model.size());x++){
+        if(!draw_shadow){
+            break;
+        }
         ModelInfo& Model = *m_infos[x];
 		int lastMaterial = -1;
 		glPushMatrix();
@@ -317,6 +330,7 @@ void display()
 	}
     
     
+    
 	// back shadowing(mark the places that shouldn't be in shadow)
     
 	glCullFace(GL_FRONT); // cull front faces
@@ -324,6 +338,9 @@ void display()
 	glStencilOp(GL_KEEP, GL_KEEP, GL_DECR); // if meet back faces -> stencil value-1
     
     for(int x=0;x<(Scene->scene_model.size());x++){
+        if(!draw_shadow){
+            break;
+        }
         ModelInfo& Model = *m_infos[x];
 		int lastMaterial = -1;
 		glPushMatrix();
@@ -427,15 +444,26 @@ void display()
 	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
     int m_size = (Scene->scene_model.size());
 	for(unsigned int x=0;x<m_size;x++){
+        auto& model_info = *m_infos[x];
 		int lastMaterial = -1;
 		glPushMatrix();
 			glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
 			glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
 			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
-			
+        int gl_draw_type;
+        if(x==0||!model_to_line){
+            gl_draw_type = GL_TRIANGLES;
+        }
+        else{
+            gl_draw_type = GL_LINE_LOOP;
+        }
 
-		for(size_t i=0;i < object[x]->fTotal;++i)
+		for(int i=0;i < object[x]->fTotal;++i)
 		{
+            if(x>0&&model_info.face_draw[i].draw==0){
+                //cout << "Hidden Face" << endl;
+                continue;
+            }
 			// set material property if this face used different material
 			if(lastMaterial != object[x]->faceList[i].m)
 			{
@@ -450,12 +478,14 @@ void display()
 				//bind them in display function here
 			}	
 			
-			glBegin(GL_TRIANGLES);
+
+			glBegin(gl_draw_type);
 			for (size_t j=0;j<3;++j)
 			{	
 				// glTexCoord2fv(object[x]->tList[object[x]->faceList[i][j].t].ptr);
 				glNormal3fv(object[x]->nList[object[x]->faceList[i][j].n].ptr);
-				glVertex3fv(object[x]->vList[object[x]->faceList[i][j].v].ptr);	
+				//glVertex3fv(object[x]->vList[object[x]->faceList[i][j].v].ptr);	
+                glVertex3fv(model_info.face_draw[i].tri[j]);
 			}
 			glEnd();
 		}
@@ -475,7 +505,7 @@ void reshape(GLsizei w, GLsizei h)
 
 void keyboard(unsigned char key, int x, int y)
 {
-	
+    auto& firstModel = *m_infos[1];
 	//printf("you press the key %c \n", key);
 	//printf("the mouse is on %lf %lf \n", x, y);
 	if(key=='s'){                          // backward
@@ -506,6 +536,18 @@ void keyboard(unsigned char key, int x, int y)
 	else if(key=='i'){
 		light_pos[2] =light_pos[2]+step/30;
 	}
+    else if(key=='h'){
+        firstModel.GoRight(step/30);
+	}
+	else if(key=='f'){
+		firstModel.GoLeft(step/30);
+	}
+	else if(key=='g'){
+		firstModel.GoDown(step/30);
+	}
+	else if(key=='t'){
+		firstModel.GoUp(step/30);
+    }
 	glutPostRedisplay();
 	
 }
@@ -551,6 +593,8 @@ void* monitor(void* v_rank){
             sem_post(&semaphores[rank]);
             for(int i=0;i<workload;i++)
             m_infos[job]->GenerateBottomTriangle(light_pos,rank);
+            if(job>1)
+                m_infos[job]->CollisionWithMesh(*m_infos[1]);
             //printf("Finish!\n");
             sem_post(&master_sem);
         }

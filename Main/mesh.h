@@ -38,6 +38,7 @@ public:
 
 class mesh  
 {
+public:
 	class Vertex		// 儲存基本 vertex 的 property
 	{
 	public:

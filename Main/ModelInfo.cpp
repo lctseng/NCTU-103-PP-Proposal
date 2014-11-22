@@ -1,9 +1,83 @@
 #include "ModelInfo.h"
+bool isVertexNear(const GLfloat* a,const GLfloat* b){
+    int fit = 0;
+    for(int i=0;i<3;i++){
+        if(abs(a[i]-b[i])<=0.3f){
+            ++fit;
+        }
+    }
+    return fit == 3;
+}
+bool isTriangleNear(const GLfloat*const* a ,const GLfloat*const* b){
+    int fit = 0;
+    for(int i=0;i<3;i++){
+        if(isVertexNear(a[i],b[i])){
+            ++fit;
+        }
+    }
+    return fit > 0;
+}
 
 ModelInfo::ModelInfo(const string& name,mesh* v_mesh)
-:name(name),mesh_ptr(v_mesh),face_size(mesh_ptr->fTotal)
+:name(name),
+mesh_ptr(v_mesh),
+face_size(mesh_ptr->fTotal),
+collision_face_check_interval(face_size/200)
 {
+    if(collision_face_check_interval <=0){
+        collision_face_check_interval = 1;
+    }
     btm_tri.reserve(face_size);
+    face_draw.reserve(face_size);
+    vertexList = mesh_ptr->vList;
+    for(int i=0;i<face_size;++i){
+        face_draw[i].draw = 1;
+        for(int j=0;j<3;j++){
+            face_draw[i].tri[j] = vertexList[mesh_ptr->faceList[i][j].v].ptr;
+            //auto otherPos = face_draw[i].tri[j];
+            //printf("my pos is %.2f,%.2f,%.2f\n",otherPos[0],otherPos[1],otherPos[2]);
+        }
+    }
+}
+
+void ModelInfo::CollisionWithMesh(const ModelInfo& other){
+    for(int x=0;x<face_size;++x){
+        auto& self_face = face_draw[x];
+        //face_draw[i] = 1;
+        // check each target triangle
+        for(int i=0;i<other.face_size;i+=other.collision_face_check_interval){
+            auto& other_face = other.face_draw[i];
+            if(isTriangleNear(self_face.tri,other_face.tri)){
+                self_face.draw = 0;
+                //cout << "HIde!" << endl;
+            }
+            else{
+                //self_face.draw = 1;
+            }
+        }
+        
+    }
+}
+
+void ModelInfo::GoLeft(GLfloat val){
+    for(auto& v:vertexList){
+        v[0] -= val;
+    }
+}
+void ModelInfo::GoRight(GLfloat val){
+    for(auto& v:vertexList){
+        v[0] += val;
+    }
+}
+void ModelInfo::GoUp(GLfloat val){
+    for(auto& v:vertexList){
+        v[2] += val;
+    }
+}
+void ModelInfo::GoDown(GLfloat val){
+    for(auto& v:vertexList){
+        v[2] -= val;
+    }
 }
 
 void ModelInfo::GenerateBottomTriangle(GLfloat* light_pos,int rank){
