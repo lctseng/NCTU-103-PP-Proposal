@@ -17,6 +17,7 @@
 #include <string>
 #include <cmath>
 #include <fstream>
+#include <omp.h>
 
 
 #define MIPMAP
@@ -631,6 +632,7 @@ void idle()
 	// (Scene->scene_model)[x].t[1]
 	// (Scene->scene_model)[x].t[2]
 	float displacement = speed * (time2-time1)/CLK_TCK;	 //現在有用時間控制速度
+#pragma omp parallel for
 	for(int x=1;x<(Scene->scene_model.size());x++){
 		auto& thisModel = *m_infos[x];
 		thisModel.GoLeft(displacement);
