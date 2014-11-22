@@ -75,6 +75,10 @@ void reshape(GLsizei , GLsizei );
 
 void* monitor(void *);
 
+void idle();		// for UBW
+int time1,time2;	// for UBW
+int speed = 40;		// for UBW
+
 int main(int argc, char** argv)
 {
     workload = 1;
@@ -508,46 +512,60 @@ void keyboard(unsigned char key, int x, int y)
     auto& firstModel = *m_infos[1];
 	//printf("you press the key %c \n", key);
 	//printf("the mouse is on %lf %lf \n", x, y);
-	if(key=='s'){                          // backward
-
+	switch(key)
+	{
+	case 's':	// backward
 		back_x = back_x+step/20;
-	}
-	else if(key=='w'){                     // forward
-
+		break;
+	case 'w':	// forward
 		front_x = front_x+step/20;
-	}
-	else if(key=='a'){                     // left
-	
+		break;
+	case 'a':	// left
 		left_x = left_x+step/30;
-	}
-	else if(key=='d'){                    // right
-
+		break;
+	case 'd':	// right
 		right_x = right_x+step/30;
-	}
-	else if(key=='l'){
+		break;
+	case 'l':	// light movement
 		light_pos[0] =light_pos[0]-step/30;
-	}
-	else if(key=='j'){
+		break;
+	case 'j':	// light movement
 		light_pos[0] =light_pos[0]+step/30;
-	}
-	else if(key=='k'){
+		break;
+	case 'k':	// light movement
 		light_pos[2] =light_pos[2]-step/30;
-	}
-	else if(key=='i'){
+		break;
+	case 'i':	// light movement
 		light_pos[2] =light_pos[2]+step/30;
-	}
-    else if(key=='h'){
-        firstModel.GoRight(step/30);
-	}
-	else if(key=='f'){
+		break;
+	case 'h':	// first object movement
+		firstModel.GoRight(step/30);
+		break;
+	case 'f':	// first object movement
 		firstModel.GoLeft(step/30);
-	}
-	else if(key=='g'){
+		break;
+	case 'g':	// first object movement
 		firstModel.GoDown(step/30);
-	}
-	else if(key=='t'){
+		break;
+	case 't':	// first object movement
 		firstModel.GoUp(step/30);
-    }
+		break;
+	
+	case 'z':    // assign idle function
+		//printf("Press z\n");
+		time1 = clock();
+		glutIdleFunc(idle);	// set idle function
+		break;
+	case 'x':
+		//printf("Press x\n");
+		glutIdleFunc(NULL);	// cancel idle function
+		break;
+	case 'c':
+		speed *= -1;
+		break;
+	default:
+		break;
+	}
 	glutPostRedisplay();
 	
 }
@@ -603,4 +621,44 @@ void* monitor(void* v_rank){
     }
     pthread_exit(NULL);
     return NULL;
+}
+
+void idle()
+{
+	time2 = clock();
+	// for(int x=1;x<(Scene->scene_model.size());x++)	// First obj is platform
+	// (Scene->scene_model)[x].t[0]
+	// (Scene->scene_model)[x].t[1]
+	// (Scene->scene_model)[x].t[2]
+	float displacement = speed * (time2-time1)/CLK_TCK;	 //現在有用時間控制速度
+	for(int x=1;x<(Scene->scene_model.size());x++){
+		auto& thisModel = *m_infos[x];
+		thisModel.GoLeft(displacement);
+		thisModel.GoDown(displacement);
+		//printf("%d : %f\t%f\t%f\n", x,
+		//				thisModel.vertexList[0].ptr[0],
+		//				thisModel.vertexList[0].ptr[1],
+		//				thisModel.vertexList[0].ptr[2]);
+		if(thisModel.vertexList[0].ptr[0] < -80.0){
+			//thisModel.vertexList[0].ptr[0] *= -1;
+			//thisModel.vertexList[0].ptr[1] *= -1;
+			//thisModel.vertexList[0].ptr[2] *= -1;
+			thisModel.GoRight(120);
+			thisModel.GoUp(120);
+		}
+		//(Scene->scene_model)[x].t[0] += displacement;
+		//(Scene->scene_model)[x].t[1] += displacement;
+		//(Scene->scene_model)[x].t[2] += displacement;
+	}
+	//day += 100.0*(time2-time1)/CLK_TCK;
+	//if(day > 360.0)
+	//	day -= 360.0;
+	//year += 10.0*(time2-time1)/CLK_TCK;
+	//if(year > 360.0)
+	//	year -= 360.0;
+
+	time1 = time2;
+
+	// recall GL_display() function
+	glutPostRedisplay();
 }
