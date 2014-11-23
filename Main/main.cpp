@@ -510,7 +510,8 @@ void reshape(GLsizei w, GLsizei h)
 
 void keyboard(unsigned char key, int x, int y)
 {
-    auto& firstModel = *m_infos[1];
+	static int select = 1;
+    auto& selectModel = *m_infos[select];
 	//printf("you press the key %c \n", key);
 	//printf("the mouse is on %lf %lf \n", x, y);
 	switch(key)
@@ -540,16 +541,32 @@ void keyboard(unsigned char key, int x, int y)
 		light_pos[2] =light_pos[2]+step/30;
 		break;
 	case 'h':	// first object movement
-		firstModel.GoRight(step/30);
+		selectModel.GoRight(step/30);
+		printf("v%d : %f\t%f\t%f\n", select,
+						selectModel.vertexList[0].ptr[0],
+						selectModel.vertexList[0].ptr[1],
+						selectModel.vertexList[0].ptr[2]);
 		break;
 	case 'f':	// first object movement
-		firstModel.GoLeft(step/30);
+		selectModel.GoLeft(step/30);
+		printf("v%d : %f\t%f\t%f\n", select,
+						selectModel.vertexList[0].ptr[0],
+						selectModel.vertexList[0].ptr[1],
+						selectModel.vertexList[0].ptr[2]);
 		break;
 	case 'g':	// first object movement
-		firstModel.GoDown(step/30);
+		selectModel.GoDown(step/30);
+		printf("v%d : %f\t%f\t%f\n", select,
+						selectModel.vertexList[0].ptr[0],
+						selectModel.vertexList[0].ptr[1],
+						selectModel.vertexList[0].ptr[2]);
 		break;
 	case 't':	// first object movement
-		firstModel.GoUp(step/30);
+		selectModel.GoUp(step/30);
+		printf("v%d : %f\t%f\t%f\n", select,
+						selectModel.vertexList[0].ptr[0],
+						selectModel.vertexList[0].ptr[1],
+						selectModel.vertexList[0].ptr[2]);
 		break;
 	
 	case 'z':    // assign idle function
@@ -563,6 +580,26 @@ void keyboard(unsigned char key, int x, int y)
 		break;
 	case 'c':
 		speed *= -1;
+		break;
+	case '1':
+		printf("press 1\n");
+		select = 1;
+		break;
+	case '2':
+		printf("press 2\n");
+		select = 2;
+		break;
+	case '3':
+		printf("press 3\n");
+		select = 3;
+		break;
+	case 'r':
+		for(int x=1;x<(Scene->scene_model.size());x++){
+			printf("v%d : %f\t%f\t%f\n", x,
+							(*m_infos[x]).vertexList[1].ptr[0],
+							(*m_infos[x]).vertexList[1].ptr[1],
+							(*m_infos[x]).vertexList[1].ptr[2]);
+		}
 		break;
 	default:
 		break;
@@ -637,11 +674,13 @@ void idle()
 		auto& thisModel = *m_infos[x];
 		thisModel.GoLeft(displacement);
 		thisModel.GoDown(displacement);
-		//printf("%d : %f\t%f\t%f\n", x,
+		
+		//printf("v%d : %f\t%f\t%f\n", x,
 		//				thisModel.vertexList[0].ptr[0],
 		//				thisModel.vertexList[0].ptr[1],
 		//				thisModel.vertexList[0].ptr[2]);
-		if(thisModel.vertexList[0].ptr[0] < -80.0){
+		
+		if(thisModel.vertexList[1].ptr[0] < -80.0){
 			//thisModel.vertexList[0].ptr[0] *= -1;
 			//thisModel.vertexList[0].ptr[1] *= -1;
 			//thisModel.vertexList[0].ptr[2] *= -1;
