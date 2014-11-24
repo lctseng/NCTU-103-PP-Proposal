@@ -22,7 +22,7 @@ ModelInfo::ModelInfo(const string& name,mesh* v_mesh)
 :name(name),
 mesh_ptr(v_mesh),
 face_size(mesh_ptr->fTotal),
-collision_face_check_interval(face_size/200)
+collision_face_check_interval(35)
 {
     if(collision_face_check_interval <=0){
         collision_face_check_interval = 1;

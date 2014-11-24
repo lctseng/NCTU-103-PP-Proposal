@@ -505,49 +505,87 @@ void reshape(GLsizei w, GLsizei h)
 
 void keyboard(unsigned char key, int x, int y)
 {
-    auto& firstModel = *m_infos[1];
+	static int select = 1;
+    auto& selectModel = *m_infos[select];
 	//printf("you press the key %c \n", key);
 	//printf("the mouse is on %lf %lf \n", x, y);
-	if(key=='s'){                          // backward
-
+	switch(key)
+	{
+	case 's':	// backward
 		back_x = back_x+step/20;
-	}
-	else if(key=='w'){                     // forward
-
+		break;
+	case 'w':	// forward
 		front_x = front_x+step/20;
-	}
-	else if(key=='a'){                     // left
-	
+		break;
+	case 'a':	// left
 		left_x = left_x+step/30;
-	}
-	else if(key=='d'){                    // right
-
+		break;
+	case 'd':	// right
 		right_x = right_x+step/30;
-	}
-	else if(key=='l'){
+		break;
+	case 'l':	// light movement
 		light_pos[0] =light_pos[0]-step/30;
-	}
-	else if(key=='j'){
+		break;
+	case 'j':	// light movement
 		light_pos[0] =light_pos[0]+step/30;
-	}
-	else if(key=='k'){
+		break;
+	case 'k':	// light movement
 		light_pos[2] =light_pos[2]-step/30;
-	}
-	else if(key=='i'){
+		break;
+	case 'i':	// light movement
 		light_pos[2] =light_pos[2]+step/30;
+		break;
+	case 'h':	// first object movement
+		selectModel.GoRight(step/30);
+		printf("v%d : %f\t%f\t%f\n", select,
+						selectModel.vertexList[0].ptr[0],
+						selectModel.vertexList[0].ptr[1],
+						selectModel.vertexList[0].ptr[2]);
+		break;
+	case 'f':	// first object movement
+		selectModel.GoLeft(step/30);
+		printf("v%d : %f\t%f\t%f\n", select,
+						selectModel.vertexList[0].ptr[0],
+						selectModel.vertexList[0].ptr[1],
+						selectModel.vertexList[0].ptr[2]);
+		break;
+	case 'g':	// first object movement
+		selectModel.GoDown(step/30);
+		printf("v%d : %f\t%f\t%f\n", select,
+						selectModel.vertexList[0].ptr[0],
+						selectModel.vertexList[0].ptr[1],
+						selectModel.vertexList[0].ptr[2]);
+		break;
+	case 't':	// first object movement
+		selectModel.GoUp(step/30);
+		printf("v%d : %f\t%f\t%f\n", select,
+						selectModel.vertexList[0].ptr[0],
+						selectModel.vertexList[0].ptr[1],
+						selectModel.vertexList[0].ptr[2]);
+		break;
+	case '1':
+		printf("press 1\n");
+		select = 1;
+		break;
+	case '2':
+		printf("press 2\n");
+		select = 2;
+		break;
+	case '3':
+		printf("press 3\n");
+		select = 3;
+		break;
+	case 'r':
+		for(int x=1;x<(Scene->scene_model.size());x++){
+			printf("v%d : %f\t%f\t%f\n", x,
+							(*m_infos[x]).vertexList[1].ptr[0],
+							(*m_infos[x]).vertexList[1].ptr[1],
+							(*m_infos[x]).vertexList[1].ptr[2]);
+		}
+		break;
+	default:
+		break;
 	}
-    else if(key=='h'){
-        firstModel.GoRight(step/30);
-	}
-	else if(key=='f'){
-		firstModel.GoLeft(step/30);
-	}
-	else if(key=='g'){
-		firstModel.GoDown(step/30);
-	}
-	else if(key=='t'){
-		firstModel.GoUp(step/30);
-    }
 	glutPostRedisplay();
 	
 }
@@ -593,8 +631,14 @@ void* monitor(void* v_rank){
             sem_post(&semaphores[rank]);
             for(int i=0;i<workload;i++)
             m_infos[job]->GenerateBottomTriangle(light_pos,rank);
+            
             if(job>1)
-                m_infos[job]->CollisionWithMesh(*m_infos[1]);
+                for(int i=1;i<(Scene->scene_model.size());i++){
+                    if(i!=job){ // the other model
+                        m_infos[job]->CollisionWithMesh(*m_infos[i]);
+                    }
+                }
+            //    m_infos[job]->CollisionWithMesh(*m_infos[1]);
             //printf("Finish!\n");
             sem_post(&master_sem);
         }
