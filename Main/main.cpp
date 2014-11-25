@@ -16,9 +16,11 @@
 #include <cmath>
 #include <fstream>
 #include "CommonDisplayRoutine.h"
+#include <omp.h>
+
 
 #define MIPMAP
-//#define MULTI_THREAD
+#define MULTI_THREAD
 
 using namespace std;
 
@@ -74,6 +76,9 @@ void reshape(GLsizei , GLsizei );
 
 void* monitor(void *);
 
+void idle();		// for UBW
+int time1,time2;	// for UBW
+int speed = 40;		// for UBW
 
 int main(int argc, char** argv)
 {
@@ -503,5 +508,51 @@ void* monitor(void* v_rank){
     pthread_exit(NULL);
     return NULL;
 }
-
 #endif
+
+
+
+void idle()
+{
+	time2 = clock();
+	// for(int x=1;x<(Scene->scene_model.size());x++)	// First obj is platform
+	// (Scene->scene_model)[x].t[0]
+	// (Scene->scene_model)[x].t[1]
+	// (Scene->scene_model)[x].t[2]
+	float displacement = speed * (time2-time1)/CLK_TCK;	 //現在有用時間控制速度
+#ifdef MULTI_THREAD
+#pragma omp parallel for
+#endif
+    for(int x=1;x<(Scene->scene_model.size());x++){
+		auto& thisModel = *m_infos[x];
+		thisModel.GoLeft(displacement);
+		thisModel.GoDown(displacement);
+		
+		//printf("v%d : %f\t%f\t%f\n", x,
+		//				thisModel.vertexList[0].ptr[0],
+		//				thisModel.vertexList[0].ptr[1],
+		//				thisModel.vertexList[0].ptr[2]);
+		
+		if(thisModel.vertexList[1].ptr[0] < -80.0){
+			//thisModel.vertexList[0].ptr[0] *= -1;
+			//thisModel.vertexList[0].ptr[1] *= -1;
+			//thisModel.vertexList[0].ptr[2] *= -1;
+			thisModel.GoRight(120);
+			thisModel.GoUp(120);
+		}
+		//(Scene->scene_model)[x].t[0] += displacement;
+		//(Scene->scene_model)[x].t[1] += displacement;
+		//(Scene->scene_model)[x].t[2] += displacement;
+	}
+	//day += 100.0*(time2-time1)/CLK_TCK;
+	//if(day > 360.0)
+	//	day -= 360.0;
+	//year += 10.0*(time2-time1)/CLK_TCK;
+	//if(year > 360.0)
+	//	year -= 360.0;
+
+	time1 = time2;
+
+	// recall GL_display() function
+	glutPostRedisplay();
+}

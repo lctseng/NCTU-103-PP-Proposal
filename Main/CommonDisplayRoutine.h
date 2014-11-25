@@ -21,7 +21,10 @@ extern GLdouble right_x;
 extern GLdouble back_x;
 extern GLdouble front_x;
 extern GLdouble step;
+extern int time1,time2;	// for UBW
+extern int speed ;		// for UBW
 
+void idle(); // for UBW
 void light(bool only_ambient)
 {	
 	
@@ -144,6 +147,18 @@ void keyboard(unsigned char key, int x, int y)
 							(*m_infos[x]).vertexList[1].ptr[1],
 							(*m_infos[x]).vertexList[1].ptr[2]);
 		}
+		break;
+	case 'z':    // assign idle function
+		//printf("Press z\n");
+		time1 = clock();
+		glutIdleFunc(idle);	// set idle function
+		break;
+	case 'x':
+		//printf("Press x\n");
+		glutIdleFunc(NULL);	// cancel idle function
+		break;
+	case 'c':
+		speed *= -1;
 		break;
 	default:
 		break;
