@@ -20,7 +20,7 @@
 
 
 #define MIPMAP
-#define MULTI_THREAD
+//#define MULTI_THREAD
 
 using namespace std;
 
@@ -525,14 +525,15 @@ void idle()
 #endif
     for(int x=1;x<(Scene->scene_model.size());x++){
 		auto& thisModel = *m_infos[x];
-		thisModel.GoLeft(displacement);
-		thisModel.GoDown(displacement);
-		
+		//thisModel.GoLeft(displacement);
+		//thisModel.GoDown(displacement);
+        thisModel.ApplySpeed();
+
 		//printf("v%d : %f\t%f\t%f\n", x,
 		//				thisModel.vertexList[0].ptr[0],
 		//				thisModel.vertexList[0].ptr[1],
 		//				thisModel.vertexList[0].ptr[2]);
-		
+		/*
 		if(thisModel.vertexList[1].ptr[0] < -80.0){
 			//thisModel.vertexList[0].ptr[0] *= -1;
 			//thisModel.vertexList[0].ptr[1] *= -1;
@@ -540,6 +541,7 @@ void idle()
 			thisModel.GoRight(120);
 			thisModel.GoUp(120);
 		}
+        */
 		//(Scene->scene_model)[x].t[0] += displacement;
 		//(Scene->scene_model)[x].t[1] += displacement;
 		//(Scene->scene_model)[x].t[2] += displacement;

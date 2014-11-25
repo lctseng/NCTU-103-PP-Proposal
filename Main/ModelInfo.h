@@ -14,6 +14,7 @@ using namespace std;
 
 
 
+
 struct TriangleInfo{
     GLfloat coor[3][3];
     GLfloat dot;
@@ -35,11 +36,13 @@ struct ModelInfo{
     void GoRight(GLfloat val);
     void GoUp(GLfloat val);
     void GoDown(GLfloat val);
+    void ApplySpeed();
     vector<TriangleInfo> btm_tri;
     vector<FaceInfo> face_draw;
     vector<mesh::Vec3> vertexList;
     string name;
     mesh* mesh_ptr;
+    GLfloat mainSpeed[3];
     int face_size;
     int collision_face_check_interval;
 };

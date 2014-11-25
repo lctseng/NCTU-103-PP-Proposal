@@ -24,12 +24,19 @@ mesh_ptr(v_mesh),
 face_size(mesh_ptr->fTotal),
 collision_face_check_interval(35)
 {
-    if(collision_face_check_interval <=0){
-        collision_face_check_interval = 1;
+    // initialize random speed
+    for(int i=0;i<3;i++){
+        mainSpeed[i] = (GLfloat)(rand()%32400)/32400.0f;
     }
+    printf("Initial speed for %s is (%f,%f,%f)\n",name.c_str(),mainSpeed[0],mainSpeed[1],mainSpeed[2]);
+    // vector size reserve
     btm_tri.reserve(face_size);
     face_draw.reserve(face_size);
     vertexList = mesh_ptr->vList;
+    // collision related
+    if(collision_face_check_interval <=0){
+        collision_face_check_interval = 1;
+    }
     for(int i=0;i<face_size;++i){
         face_draw[i].draw = 1;
         for(int j=0;j<3;j++){
@@ -78,6 +85,26 @@ void ModelInfo::GoDown(GLfloat val){
     for(auto& v:vertexList){
         v[2] -= val;
     }
+}
+
+void  ModelInfo::ApplySpeed(){
+    bool speedChanged[3] = {false,false,false};
+    GLfloat nextSpeed[3] = {0.0f,0.0f,0.0f};
+    for(auto& v:vertexList){
+        for(int i=0;i<3;i++){
+            v[i] += mainSpeed[i];
+            if(!speedChanged[i]&&(v[i]>30||v[i]<-10)){
+                nextSpeed[i] = mainSpeed[i]*-1.0f;
+                speedChanged[i] = true;
+            }
+        }
+    }
+    for(int i=0;i<3;i++){
+        if(speedChanged[i]){
+            mainSpeed[i] = nextSpeed[i];
+        }
+    }
+    glutPostRedisplay();
 }
 
 void ModelInfo::GenerateBottomTriangle(GLfloat* light_pos,int rank){

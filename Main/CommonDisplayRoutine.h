@@ -189,11 +189,14 @@ void motion(int x, int y){
 }
 
 void modelProcess(int job,int rank){
-    m_infos[job]->GenerateBottomTriangle(light_pos,rank);          
-    if(job>1)
+    m_infos[job]->GenerateBottomTriangle(light_pos,rank); 
+    
+    if(job>1){
+        m_infos[job]->ApplySpeed();
         for(int i=1;i<(Scene->scene_model.size());i++){
             if(i!=job){ // the other model
                 m_infos[job]->CollisionWithMesh(*m_infos[i]);
             }
         }
+    }
 }
