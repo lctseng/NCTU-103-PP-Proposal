@@ -9,17 +9,16 @@
 #include "wglew.h"
 #include "omp.h"
 
-#include "lights.h"
-#include "view.h"
-#include "scene.h"
+
 #include "ModelInfo.h"
 #include <vector>
 #include <string>
 #include <cmath>
 #include <fstream>
-
+#include "CommonDisplayRoutine.h"
 
 #define MIPMAP
+//#define MULTI_THREAD
 
 using namespace std;
 
@@ -75,10 +74,13 @@ void reshape(GLsizei , GLsizei );
 
 void* monitor(void *);
 
+
 int main(int argc, char** argv)
 {
+#ifdef MULTI_THREAD
     workload = 1;
-	thread_count = 1;//omp_get_num_procs()-1;
+	thread_count = omp_get_num_procs()-1;
+#endif
 	viewing = new views("assignment3.view");
 	lighting = new lights("assignment3.light");
 	Scene = new scenes("scene1.scene");
@@ -91,6 +93,7 @@ int main(int argc, char** argv)
         m_infos.push_back(new ModelInfo(model_name,temp));
 	}
 
+#ifdef MULTI_THREAD
     pthread_mutex_init(&mutex, NULL);
     threads_ptr = new pthread_t[thread_count];
     semaphores = new sem_t[thread_count];
@@ -99,7 +102,7 @@ int main(int argc, char** argv)
         sem_init(&semaphores[i], 0, 0);
     }
     sem_init(&master_sem,0,0);
-	
+#endif
 	camera_eye[0]=viewing->eye[0];	camera_eye[1]=viewing->eye[1];	camera_eye[2]=viewing->eye[2];
 	camera_vat[0]=viewing->vat[0];	camera_vat[1]=viewing->vat[1];	camera_vat[2]=viewing->vat[2];
 	camera_vup[0]=viewing->vup[0];	camera_vup[1]=viewing->vup[1];	camera_vup[2]=viewing->vup[2];
@@ -131,45 +134,11 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-void light(bool only_ambient)
-{	
-	
-	for(unsigned int i=0; i<(lighting->light_source.size()); i++){
-		GLfloat no_specular[] = {0, 0, 0, 0};
-		GLfloat no_diffuse[] = {0, 0, 0, 0};
 
-		GLfloat light_specular[] = {(lighting->light_source)[i].s[0], (lighting->light_source)[i].s[1], (lighting->light_source)[i].s[2], 1.0};
-		GLfloat light_diffuse[] = {(lighting->light_source)[i].d[0], (lighting->light_source)[i].d[1], (lighting->light_source)[i].d[2], 1.0};
-		GLfloat light_ambient[] = {(lighting->light_source)[i].a[0], (lighting->light_source)[i].a[1], (lighting->light_source)[i].a[2], 1.0};
-		GLfloat light_position[] = {light_pos[0],light_pos[1],light_pos[2], 1.0};
-		glShadeModel(GL_SMOOTH);
-
-		
-		// z buffer enable
-		glEnable(GL_DEPTH_TEST);
-
-		// enable lighting
-		glEnable(GL_LIGHTING);
-		// set light property
-		glEnable(GL_LIGHT0+i);
-		glLightfv(GL_LIGHT0+i, GL_POSITION, light_position);
-		if(only_ambient){
-			glLightfv(GL_LIGHT0+i, GL_DIFFUSE, no_diffuse);
-			glLightfv(GL_LIGHT0+i, GL_SPECULAR, no_specular);
-		}
-		else{
-			glLightfv(GL_LIGHT0+i, GL_DIFFUSE, light_diffuse);
-			glLightfv(GL_LIGHT0+i, GL_SPECULAR, light_specular);
-		}
-		glLightfv(GL_LIGHT0+i, GL_AMBIENT, light_ambient);
-	}
-	GLfloat ambient[]={lighting->amb[0], lighting->amb[1], lighting->amb[2]};
-	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);
-
-}
 
 void display()
 {
+#ifdef MULTI_THREAD
     // reset light triangle
     for(int i=0;i<m_infos.size();i++){
         job_list.push_back(i);
@@ -180,7 +149,12 @@ void display()
     for(int i=0;i<m_infos.size();i++){
         sem_wait(&master_sem);
     }
+#else
+    for(int i=1;i<m_infos.size();i++){
+        modelProcess(i,0);
+    }
 
+#endif
     
     
 
@@ -497,121 +471,8 @@ void display()
 	glutSwapBuffers();
 }
 
-void reshape(GLsizei w, GLsizei h)
-{
-	windowSize[0] = w;
-	windowSize[1] = h;
-}
 
-void keyboard(unsigned char key, int x, int y)
-{
-	static int select = 1;
-    auto& selectModel = *m_infos[select];
-	//printf("you press the key %c \n", key);
-	//printf("the mouse is on %lf %lf \n", x, y);
-	switch(key)
-	{
-	case 's':	// backward
-		back_x = back_x+step/20;
-		break;
-	case 'w':	// forward
-		front_x = front_x+step/20;
-		break;
-	case 'a':	// left
-		left_x = left_x+step/30;
-		break;
-	case 'd':	// right
-		right_x = right_x+step/30;
-		break;
-	case 'l':	// light movement
-		light_pos[0] =light_pos[0]-step/30;
-		break;
-	case 'j':	// light movement
-		light_pos[0] =light_pos[0]+step/30;
-		break;
-	case 'k':	// light movement
-		light_pos[2] =light_pos[2]-step/30;
-		break;
-	case 'i':	// light movement
-		light_pos[2] =light_pos[2]+step/30;
-		break;
-	case 'h':	// first object movement
-		selectModel.GoRight(step/30);
-		printf("v%d : %f\t%f\t%f\n", select,
-						selectModel.vertexList[0].ptr[0],
-						selectModel.vertexList[0].ptr[1],
-						selectModel.vertexList[0].ptr[2]);
-		break;
-	case 'f':	// first object movement
-		selectModel.GoLeft(step/30);
-		printf("v%d : %f\t%f\t%f\n", select,
-						selectModel.vertexList[0].ptr[0],
-						selectModel.vertexList[0].ptr[1],
-						selectModel.vertexList[0].ptr[2]);
-		break;
-	case 'g':	// first object movement
-		selectModel.GoDown(step/30);
-		printf("v%d : %f\t%f\t%f\n", select,
-						selectModel.vertexList[0].ptr[0],
-						selectModel.vertexList[0].ptr[1],
-						selectModel.vertexList[0].ptr[2]);
-		break;
-	case 't':	// first object movement
-		selectModel.GoUp(step/30);
-		printf("v%d : %f\t%f\t%f\n", select,
-						selectModel.vertexList[0].ptr[0],
-						selectModel.vertexList[0].ptr[1],
-						selectModel.vertexList[0].ptr[2]);
-		break;
-	case '1':
-		printf("press 1\n");
-		select = 1;
-		break;
-	case '2':
-		printf("press 2\n");
-		select = 2;
-		break;
-	case '3':
-		printf("press 3\n");
-		select = 3;
-		break;
-	case 'r':
-		for(int x=1;x<(Scene->scene_model.size());x++){
-			printf("v%d : %f\t%f\t%f\n", x,
-							(*m_infos[x]).vertexList[1].ptr[0],
-							(*m_infos[x]).vertexList[1].ptr[1],
-							(*m_infos[x]).vertexList[1].ptr[2]);
-		}
-		break;
-	default:
-		break;
-	}
-	glutPostRedisplay();
-	
-}
-void mouse(int button, int state, int x, int y){
-	if (state == GLUT_DOWN){
-		startX = x;
-		startY = y;
-		oldX = x; // without assigning oldX / oldY, vX / vY will count new x / y, which will lead rotation wrong positioning 
-		oldY = y;
-	}
-	else if(state == GLUT_UP){
-		//printf("the mouse moves %d %d \n", x-startX,  y-startY);
-	}
-}
-void motion(int x, int y){
-	//printf("the mouse is moving to %d %d \n", x, y);
-	GLdouble vX = x-oldX;
-	GLdouble vY = y-oldY;
-	rotX = rotX + vY/10; // total amount of upward / downward motion
-	rotY = rotY + vX/10; // total amount of left / right motion
-	oldX = x;
-	oldY = y;
-	glutPostRedisplay();
-}
-
-
+#ifdef MULTI_THREAD
 void* monitor(void* v_rank){
     int rank = (int)v_rank;
     int job;
@@ -629,15 +490,9 @@ void* monitor(void* v_rank){
             job_list.pop_back();
             pthread_mutex_unlock(&mutex);
             sem_post(&semaphores[rank]);
-            for(int i=0;i<workload;i++)
-            m_infos[job]->GenerateBottomTriangle(light_pos,rank);
-            
-            if(job>1)
-                for(int i=1;i<(Scene->scene_model.size());i++){
-                    if(i!=job){ // the other model
-                        m_infos[job]->CollisionWithMesh(*m_infos[i]);
-                    }
-                }
+            for(int i=0;i<workload;i++){
+                modelProcess(job,rank);
+            }
             //    m_infos[job]->CollisionWithMesh(*m_infos[1]);
             //printf("Finish!\n");
             sem_post(&master_sem);
@@ -648,3 +503,5 @@ void* monitor(void* v_rank){
     pthread_exit(NULL);
     return NULL;
 }
+
+#endif
