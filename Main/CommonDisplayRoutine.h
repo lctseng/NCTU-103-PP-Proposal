@@ -23,6 +23,7 @@ extern GLdouble front_x;
 extern GLdouble step;
 extern int time1,time2;	// for UBW
 extern int speed ;		// for UBW
+extern bool move_enable;
 
 void idle(); // for UBW
 void light(bool only_ambient)
@@ -148,14 +149,14 @@ void keyboard(unsigned char key, int x, int y)
 							(*m_infos[x]).vertexList[1].ptr[2]);
 		}
 		break;
-	case 'z':    // assign idle function
-		//printf("Press z\n");
-		time1 = clock();
-		glutIdleFunc(idle);	// set idle function
-		break;
-	case 'x':
-		//printf("Press x\n");
-		glutIdleFunc(NULL);	// cancel idle function
+	case 'z':    // toggle move
+        move_enable = !move_enable;
+        break;
+	case 'x':   // reset collision flag
+        for(int x=1;x<(Scene->scene_model.size());x++){
+		    auto& thisModel = *m_infos[x];
+            thisModel.resetCollision();
+        }
 		break;
 	case 'c':
 		speed *= -1;
@@ -192,7 +193,9 @@ void modelProcess(int job,int rank){
     m_infos[job]->GenerateBottomTriangle(light_pos,rank); 
     
     if(job>1){
-        m_infos[job]->ApplySpeed();
+        if(move_enable){
+            m_infos[job]->ApplySpeed();
+        }
         for(int i=1;i<(Scene->scene_model.size());i++){
             if(i!=job){ // the other model
                 m_infos[job]->CollisionWithMesh(*m_infos[i]);

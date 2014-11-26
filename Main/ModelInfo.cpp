@@ -66,6 +66,13 @@ void ModelInfo::CollisionWithMesh(const ModelInfo& other){
     }
 }
 
+void ModelInfo::resetCollision(){
+    for(int x=0;x<face_size;++x){
+        auto& self_face = face_draw[x];
+        self_face.draw = 1;
+    }
+}
+
 void ModelInfo::GoLeft(GLfloat val){
     for(auto& v:vertexList){
         v[0] -= val;

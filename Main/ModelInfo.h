@@ -37,6 +37,7 @@ struct ModelInfo{
     void GoUp(GLfloat val);
     void GoDown(GLfloat val);
     void ApplySpeed();
+    void resetCollision();
     vector<TriangleInfo> btm_tri;
     vector<FaceInfo> face_draw;
     vector<mesh::Vec3> vertexList;

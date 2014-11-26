@@ -20,7 +20,7 @@
 
 
 #define MIPMAP
-//#define MULTI_THREAD
+#define MULTI_THREAD
 
 using namespace std;
 
@@ -38,6 +38,9 @@ GLdouble rotX, rotY;
 int render_line = false;
 int model_to_line = true;
 int draw_shadow = false;
+bool move_enable = false;
+bool draw_ground = false;
+
 
 GLdouble left_l, right_l, back_l, front_l;
 GLdouble left_x=0;
@@ -211,7 +214,7 @@ void display()
 			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
 			
         int gl_draw_type;
-        if(x==0||!model_to_line){
+        if((x==0&&draw_ground)||!model_to_line){
             gl_draw_type = GL_TRIANGLES;
         }
         else{
@@ -430,7 +433,7 @@ void display()
 			glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
 			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
         int gl_draw_type;
-        if(x==0||!model_to_line){
+        if((x==0&&draw_ground)||!model_to_line){
             gl_draw_type = GL_TRIANGLES;
         }
         else{
