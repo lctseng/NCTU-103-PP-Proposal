@@ -20,7 +20,7 @@
 
 
 #define MIPMAP
-#define MULTI_THREAD
+//#define MULTI_THREAD
 
 using namespace std;
 
@@ -32,7 +32,7 @@ vector<ModelInfo*> m_infos;
 int windowSize[2];
 int startX, startY;
 int oldX, oldY;
-GLdouble rotX, rotY;
+GLdouble rotX = -66, rotY = 54;
 
 
 int render_line = false;
@@ -43,10 +43,10 @@ bool draw_ground = false;
 
 
 GLdouble left_l, right_l, back_l, front_l;
-GLdouble left_x=0;
-GLdouble right_x=0;
-GLdouble back_x=0;
-GLdouble front_x=0;
+GLdouble left_x=7.26;
+GLdouble right_x=58.67;
+GLdouble back_x=236.36;
+GLdouble front_x=144.16;
 GLdouble step;
 
 GLdouble camera_eye[3];
@@ -89,8 +89,8 @@ int main(int argc, char** argv)
     workload = 1;
 	thread_count = omp_get_num_procs()-1;
 #endif
-	viewing = new views("assignment3.view");
-	lighting = new lights("assignment3.light");
+	viewing = new views("GameOfLife.view");
+	lighting = new lights("GameOfLife.light");
 	Scene = new scenes("scene1.scene");
 
 	for(unsigned int x=0;x<(Scene->scene_model.size());x++){
@@ -128,10 +128,11 @@ int main(int argc, char** argv)
 	glutInitWindowPosition(0, 0);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_STENCIL);
 	glutCreateWindow("Parallel_GL");	
+
 	glewInit();
 
 	
-
+    glutIdleFunc(idle);
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
 	glutKeyboardFunc(keyboard);
@@ -146,6 +147,7 @@ int main(int argc, char** argv)
 
 void display()
 {
+    /*
 #ifdef MULTI_THREAD
     // reset light triangle
     for(int i=0;i<m_infos.size();i++){
@@ -163,10 +165,8 @@ void display()
     }
 
 #endif
-    
-    
+    */
 
-    //cout << "run with" << omp_get_thread_num() << endl;
 	// clear the buffer
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);      //清除用color
 	glClearDepth(1.0f);                        // Depth Buffer (就是z buffer) Setup
@@ -202,282 +202,42 @@ void display()
 	//cout<<camera_eye[0]<<" "<<camera_eye[1]<<" "<<camera_eye[2]<<endl;
 
 	//注意light位置的設定，要在gluLookAt之後
-	light(1); // only ambient on 
+	light(0); // only ambient on 
 	
 	// draw ambient product
+    
+	// draw ambient product
+    
 	for(int x=0;x<(Scene->scene_model.size());x++){
         auto& model_info = *m_infos[x];
-		int lastMaterial = -1;
-		glPushMatrix();
-			glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
-			glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
-			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
-			
         int gl_draw_type;
         if((x==0&&draw_ground)||!model_to_line){
             gl_draw_type = GL_TRIANGLES;
         }
         else{
-            gl_draw_type = GL_LINE_LOOP;
+            gl_draw_type = GL_POINTS;
         }
-		for(size_t i=0;i < object[x]->fTotal;++i)
-		{
-			// set material property if this face used different material
-			if(lastMaterial != object[x]->faceList[i].m)
-			{
-				lastMaterial = (int)object[x]->faceList[i].m;
-				glMaterialfv(GL_FRONT, GL_AMBIENT  , object[x]->mList[lastMaterial].Ka);
-				glMaterialfv(GL_FRONT, GL_DIFFUSE  , object[x]->mList[lastMaterial].Kd);
-				glMaterialfv(GL_FRONT, GL_SPECULAR , object[x]->mList[lastMaterial].Ks);
-				glMaterialfv(GL_FRONT, GL_SHININESS, &object[x]->mList[lastMaterial].Ns);
-				
-				//you can obtain the texture name by object[x]->mList[lastMaterial].map_Kd
-				//load them once in the main function before mainloop
-				//bind them in display function here
-			}	
-
-			glBegin(gl_draw_type);
-			for (size_t j=0;j<3;++j)
-			{	
-				// glTexCoord2fv(object[x]->tList[object[x]->faceList[i][j].t].ptr);
-				glNormal3fv(object[x]->nList[object[x]->faceList[i][j].n].ptr);
-				//glVertex3fv(object[x]->vList[object[x]->faceList[i][j].v].ptr);
-                glVertex3fv(model_info.face_draw[i].tri[j]);
-			}
-			glEnd();
-		}
-		glPopMatrix();	
-		
-	}
-
-	glColorMask(GL_FALSE,GL_FALSE,GL_FALSE,GL_FALSE); // color buffer writing off
-	glDepthMask(GL_FALSE); // depth buffer writing off
-	glEnable(GL_STENCIL_TEST); // enable stencil test to change the values in stencil buffer
-	glClearStencil(0);
-	glClear(GL_STENCIL_BUFFER_BIT);
-	glEnable(GL_CULL_FACE); // enable culling
-    
-
-	// front shadowing (mark the places that should be in the shadow)
-	glCullFace(GL_BACK); // cull back faces
-	glStencilFunc(GL_ALWAYS,1,~0);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_INCR); // meet front face -> stencil value + 1
-	
-    
-    
-    
-    for(int x=0;x<(Scene->scene_model.size());x++){
-        if(!draw_shadow){
-            break;
-        }
-        ModelInfo& Model = *m_infos[x];
-		int lastMaterial = -1;
-		glPushMatrix();
-		glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
-		glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
-		glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
-			
-        
-        for(int i=0;i < Model.face_size;++i)
-		{
-            TriangleInfo& triangle = Model.btm_tri[i];
-            auto tri = triangle.coor;
-            if(triangle.dot>0){
-
-				glBegin(GL_POLYGON); // draw shadow polygon 1
-					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
-				glEnd();
-			
-				glBegin(GL_POLYGON); // draw shadow polygon 2
-					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
-				glEnd();
-
-				glBegin(GL_POLYGON); // draw shadow polygon 3
-					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
-				glEnd();
-            }
-		}
-
-		glPopMatrix();	
-		
-	}
-    
-    
-    
-	// back shadowing(mark the places that shouldn't be in shadow)
-    
-	glCullFace(GL_FRONT); // cull front faces
-	glStencilFunc(GL_ALWAYS,1,~0);
-	glStencilOp(GL_KEEP, GL_KEEP, GL_DECR); // if meet back faces -> stencil value-1
-    
-    for(int x=0;x<(Scene->scene_model.size());x++){
-        if(!draw_shadow){
-            break;
-        }
-        ModelInfo& Model = *m_infos[x];
-		int lastMaterial = -1;
-		glPushMatrix();
-		glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
-		glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
-		glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
-			
-        
-        for(int i=0;i < Model.face_size;++i)
-		{
-            TriangleInfo& triangle = Model.btm_tri[i];
-            auto tri = triangle.coor;
-            if(triangle.dot>0){
-
-				glBegin(GL_POLYGON); // draw shadow polygon 1
-					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
-				glEnd();
-			
-				glBegin(GL_POLYGON); // draw shadow polygon 2
-					glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
-				glEnd();
-
-				glBegin(GL_POLYGON); // draw shadow polygon 3
-					glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
-					glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
-				glEnd();
-            }
-		}
-
-		glPopMatrix();	
-		
-	}
-    
-	glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE); // color buffer on
-	glDepthMask(GL_TRUE); // depth buffer on
-	glCullFace(GL_BACK); 
-	glDisable(GL_CULL_FACE); // disable back face culling, or some planes will disappear
-    
-    // draw the unshadowed part
-	light(0); // all lights on
-
-    
-    if(render_line){
-	    // line_loop_test
-	    glCullFace(GL_FRONT);
-	    glStencilFunc(GL_ALWAYS,1,~0);
-	    glStencilOp(GL_KEEP, GL_KEEP, GL_DECR);
-        for(int x=0;x<(Scene->scene_model.size());x++){
-            ModelInfo& Model = *m_infos[x];
-		    int lastMaterial = -1;
-		    glPushMatrix();
-		    glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
-		    glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
-		    glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
-			
-        
-            for(int i=0;i < Model.face_size;++i)
-		    {
-                TriangleInfo& triangle = Model.btm_tri[i];
-                auto tri = triangle.coor;
-                if(triangle.dot>0){
-
-				    glBegin(GL_LINE_LOOP); // draw shadow polygon 1
-					    glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					    glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
-					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
-				    glEnd();
-			
-				    glBegin(GL_LINE_LOOP); // draw shadow polygon 2
-					    glVertex3f(tri[1][0],tri[1][1],tri[1][2]);
-					    glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
-					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][1].v].ptr);	
-				    glEnd();
-
-				    glBegin(GL_LINE_LOOP); // draw shadow polygon 3
-					    glVertex3f(tri[2][0],tri[2][1],tri[2][2]);
-					    glVertex3f(tri[0][0],tri[0][1],tri[0][2]);
-					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][0].v].ptr);	
-					    glVertex3fv(Model.mesh_ptr->vList[Model.mesh_ptr->faceList[i][2].v].ptr);	
-				    glEnd();
+        glBegin(gl_draw_type);
+        for(int i=0;i < ModelInfo::WORLD_HEIGHT ;++i)
+		{	
+            for(int j=0;j < ModelInfo::WORLD_WIDTH ;++j){
+                if(!model_info.vertexList[i][j].dead){
+                    
+                    glVertex3fv(model_info.vertexList[i][j].ptr);
+			        
                 }
-		    }
-
-		    glPopMatrix();	
-		
-	    }
-    }
-	
-
-	glStencilFunc(GL_EQUAL, 0, ~0); // if stencil value = 0, draw the polygon with new lights
-	glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-    int m_size = (Scene->scene_model.size());
-	for(unsigned int x=0;x<m_size;x++){
-        auto& model_info = *m_infos[x];
-		int lastMaterial = -1;
-		glPushMatrix();
-			glTranslatef((Scene->scene_model)[x].t[0], (Scene->scene_model)[x].t[1], (Scene->scene_model)[x].t[2]);
-			glRotatef((Scene->scene_model)[x].angle, (Scene->scene_model)[x].r[0], (Scene->scene_model)[x].r[1], (Scene->scene_model)[x].r[2]);
-			glScalef((Scene->scene_model)[x].sc[0], (Scene->scene_model)[x].sc[1], (Scene->scene_model)[x].sc[2]);
-        int gl_draw_type;
-        if((x==0&&draw_ground)||!model_to_line){
-            gl_draw_type = GL_TRIANGLES;
-        }
-        else{
-            gl_draw_type = GL_LINE_LOOP;
-        }
-
-		for(int i=0;i < object[x]->fTotal;++i)
-		{
-            if(x>0&&model_info.face_draw[i].draw==0){
-                //cout << "Hidden Face" << endl;
-                continue;
             }
-			// set material property if this face used different material
-			if(lastMaterial != object[x]->faceList[i].m)
-			{
-				lastMaterial = (int)object[x]->faceList[i].m;
-				glMaterialfv(GL_FRONT, GL_AMBIENT  , object[x]->mList[lastMaterial].Ka);
-				glMaterialfv(GL_FRONT, GL_DIFFUSE  , object[x]->mList[lastMaterial].Kd);
-				glMaterialfv(GL_FRONT, GL_SPECULAR , object[x]->mList[lastMaterial].Ks);
-				glMaterialfv(GL_FRONT, GL_SHININESS, &object[x]->mList[lastMaterial].Ns);
-				
-				//you can obtain the texture name by object[x]->mList[lastMaterial].map_Kd
-				//load them once in the main function before mainloop
-				//bind them in display function here
-			}	
+            
 			
-
-			glBegin(gl_draw_type);
-			for (size_t j=0;j<3;++j)
-			{	
-				// glTexCoord2fv(object[x]->tList[object[x]->faceList[i][j].t].ptr);
-				glNormal3fv(object[x]->nList[object[x]->faceList[i][j].n].ptr);
-				//glVertex3fv(object[x]->vList[object[x]->faceList[i][j].v].ptr);	
-                glVertex3fv(model_info.face_draw[i].tri[j]);
-			}
-			glEnd();
 		}
-		glPopMatrix();	
+        glEnd();
 		
-	}	
+	}
+
     
-	glDisable(GL_STENCIL_TEST);
 	glutSwapBuffers();
 }
+
 
 
 #ifdef MULTI_THREAD
@@ -513,51 +273,10 @@ void* monitor(void* v_rank){
 }
 #endif
 
-
-
-void idle()
-{
-	time2 = clock();
-	// for(int x=1;x<(Scene->scene_model.size());x++)	// First obj is platform
-	// (Scene->scene_model)[x].t[0]
-	// (Scene->scene_model)[x].t[1]
-	// (Scene->scene_model)[x].t[2]
-	float displacement = speed * (time2-time1)/CLK_TCK;	 //現在有用時間控制速度
-#ifdef MULTI_THREAD
-#pragma omp parallel for
-#endif
-    for(int x=1;x<(Scene->scene_model.size());x++){
-		auto& thisModel = *m_infos[x];
-		//thisModel.GoLeft(displacement);
-		//thisModel.GoDown(displacement);
-        thisModel.ApplySpeed();
-
-		//printf("v%d : %f\t%f\t%f\n", x,
-		//				thisModel.vertexList[0].ptr[0],
-		//				thisModel.vertexList[0].ptr[1],
-		//				thisModel.vertexList[0].ptr[2]);
-		/*
-		if(thisModel.vertexList[1].ptr[0] < -80.0){
-			//thisModel.vertexList[0].ptr[0] *= -1;
-			//thisModel.vertexList[0].ptr[1] *= -1;
-			//thisModel.vertexList[0].ptr[2] *= -1;
-			thisModel.GoRight(120);
-			thisModel.GoUp(120);
-		}
-        */
-		//(Scene->scene_model)[x].t[0] += displacement;
-		//(Scene->scene_model)[x].t[1] += displacement;
-		//(Scene->scene_model)[x].t[2] += displacement;
-	}
-	//day += 100.0*(time2-time1)/CLK_TCK;
-	//if(day > 360.0)
-	//	day -= 360.0;
-	//year += 10.0*(time2-time1)/CLK_TCK;
-	//if(year > 360.0)
-	//	year -= 360.0;
-
-	time1 = time2;
-
-	// recall GL_display() function
-	glutPostRedisplay();
+void idle(){
+    if(move_enable){
+        m_infos[0]->GenerateNextGeneration();
+        m_infos[0]->MigrateToNext();
+        glutPostRedisplay();
+    }
 }

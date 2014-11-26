@@ -10,6 +10,7 @@
 #include "scene.h"
 #include <cmath>
 #define SHADOW_RATE 10
+
 using namespace std;
 
 
@@ -30,20 +31,29 @@ bool isTriangleNear(const GLfloat*const* a ,const GLfloat*const* b);
 
 struct ModelInfo{
     ModelInfo(const string& name,mesh* v_mesh);
-    void GenerateBottomTriangle(GLfloat* light_pos,int rank);
-    void CollisionWithMesh(const ModelInfo& other);
-    void GoLeft(GLfloat val);
-    void GoRight(GLfloat val);
-    void GoUp(GLfloat val);
-    void GoDown(GLfloat val);
-    void ApplySpeed();
-    void resetCollision();
+    ~ModelInfo();
+    void GenerateGameOfLifeBase();
+    void GenerateNextGeneration();
+    void MigrateToNext();
     vector<TriangleInfo> btm_tri;
     vector<FaceInfo> face_draw;
-    vector<mesh::Vec3> vertexList;
+    mesh::Vec3** vertexList;
+    mesh::Vec3** nextList;
     string name;
     mesh* mesh_ptr;
     GLfloat mainSpeed[3];
     int face_size;
-    int collision_face_check_interval;
+    int vertex_size;
+    static const int WORLD_HEIGHT = 2000;
+    static const int WORLD_WIDTH = 2000;
+    //Direction
+    int Direct1(int i,int j);
+    int Direct2(int i,int j);
+    int Direct3(int i,int j);
+    int Direct4(int i,int j);
+    int Direct6(int i,int j);
+    int Direct7(int i,int j);
+    int Direct8(int i,int j);
+    int Direct9(int i,int j);
+    int Surround(int i,int j);
 };

@@ -59,6 +59,16 @@ public:
 	{
 	public:
 		float ptr[3];
+        Vec3(){
+            
+        }
+        Vec3 (float a,float b,float c,bool v_dead = false)
+        {
+            ptr[0] = a;
+            ptr[1] = b;
+            ptr[2] = c;
+            dead = v_dead;
+        } 
 		Vec3 (float *v) 
 		{
 			for (size_t i=0;i<3;i++)
@@ -68,6 +78,7 @@ public:
 		{
 			return ptr[index];
 		}
+        bool dead;
 	};
 
 	class FACE			// faceList ªº structure

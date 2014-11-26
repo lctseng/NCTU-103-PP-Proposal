@@ -71,7 +71,7 @@ void reshape(GLsizei w, GLsizei h)
 
 void keyboard(unsigned char key, int x, int y)
 {
-	static int select = 1;
+	static int select = 0;
     auto& selectModel = *m_infos[select];
 	//printf("you press the key %c \n", key);
 	//printf("the mouse is on %lf %lf \n", x, y);
@@ -101,63 +101,25 @@ void keyboard(unsigned char key, int x, int y)
 	case 'i':	// light movement
 		light_pos[2] =light_pos[2]+step/30;
 		break;
-	case 'h':	// first object movement
-		selectModel.GoRight(step/30);
-		printf("v%d : %f\t%f\t%f\n", select,
-						selectModel.vertexList[0].ptr[0],
-						selectModel.vertexList[0].ptr[1],
-						selectModel.vertexList[0].ptr[2]);
-		break;
-	case 'f':	// first object movement
-		selectModel.GoLeft(step/30);
-		printf("v%d : %f\t%f\t%f\n", select,
-						selectModel.vertexList[0].ptr[0],
-						selectModel.vertexList[0].ptr[1],
-						selectModel.vertexList[0].ptr[2]);
-		break;
-	case 'g':	// first object movement
-		selectModel.GoDown(step/30);
-		printf("v%d : %f\t%f\t%f\n", select,
-						selectModel.vertexList[0].ptr[0],
-						selectModel.vertexList[0].ptr[1],
-						selectModel.vertexList[0].ptr[2]);
-		break;
-	case 't':	// first object movement
-		selectModel.GoUp(step/30);
-		printf("v%d : %f\t%f\t%f\n", select,
-						selectModel.vertexList[0].ptr[0],
-						selectModel.vertexList[0].ptr[1],
-						selectModel.vertexList[0].ptr[2]);
-		break;
 	case '1':
 		printf("press 1\n");
-		select = 1;
+		//select = 1;
 		break;
 	case '2':
 		printf("press 2\n");
-		select = 2;
+		//select = 2;
 		break;
 	case '3':
 		printf("press 3\n");
-		select = 3;
+		//select = 3;
 		break;
-	case 'r':
-		for(int x=1;x<(Scene->scene_model.size());x++){
-			printf("v%d : %f\t%f\t%f\n", x,
-							(*m_infos[x]).vertexList[1].ptr[0],
-							(*m_infos[x]).vertexList[1].ptr[1],
-							(*m_infos[x]).vertexList[1].ptr[2]);
-		}
-		break;
-	case 'z':    // toggle move
+	case 'z':    // Migrate
+        selectModel.GenerateNextGeneration();
+        selectModel.MigrateToNext();
+        break;
+    case 'x':
         move_enable = !move_enable;
         break;
-	case 'x':   // reset collision flag
-        for(int x=1;x<(Scene->scene_model.size());x++){
-		    auto& thisModel = *m_infos[x];
-            thisModel.resetCollision();
-        }
-		break;
 	case 'c':
 		speed *= -1;
 		break;
@@ -165,7 +127,8 @@ void keyboard(unsigned char key, int x, int y)
 		break;
 	}
 	glutPostRedisplay();
-	
+    //printf("Light %.2f %.2f %2f \n", light_pos[0],light_pos[1],light_pos[2]);
+	//printf("Pos %.2f %.2f %2f %.2f \n", back_x,front_x,left_x,right_x);
 }
 void mouse(int button, int state, int x, int y){
 	if (state == GLUT_DOWN){
@@ -187,19 +150,9 @@ void motion(int x, int y){
 	oldX = x;
 	oldY = y;
 	glutPostRedisplay();
+    //printf("Eye %2.f %2.f\n",rotX,rotY);
 }
 
 void modelProcess(int job,int rank){
-    m_infos[job]->GenerateBottomTriangle(light_pos,rank); 
-    
-    if(job>1){
-        if(move_enable){
-            m_infos[job]->ApplySpeed();
-        }
-        for(int i=1;i<(Scene->scene_model.size());i++){
-            if(i!=job){ // the other model
-                m_infos[job]->CollisionWithMesh(*m_infos[i]);
-            }
-        }
-    }
+
 }
