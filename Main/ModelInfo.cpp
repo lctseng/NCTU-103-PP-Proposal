@@ -7,12 +7,28 @@ ModelInfo::~ModelInfo(){
     }
     delete[] vertexList;
     delete[] nextList;
+    delete loads;
 }
-ModelInfo::ModelInfo(const string& name,mesh* v_mesh)
+ModelInfo::ModelInfo(const string& name,mesh* v_mesh,int thread_count)
 :name(name),
 mesh_ptr(v_mesh),
 face_size(mesh_ptr->fTotal)
 {
+    // generate workload
+    loads = new WorkLoad[thread_count];
+    int part = WORLD_HEIGHT / thread_count;
+    int remain = WORLD_HEIGHT - part*thread_count;
+    int start = 0;
+    for(int i=0;i<thread_count;i++){
+        loads[i].start = start;
+        start += part;
+        loads[i].end = start;
+    }
+    loads[thread_count-1].end += remain;
+
+    for(int i=0;i<thread_count;i++){
+        printf("Loads for %d is %d to %d\n",i,loads[i].start,loads[i].end);
+    }
     // initialize random speed
     for(int i=0;i<3;i++){
         mainSpeed[i] = (GLfloat)(rand()%32400)/32400.0f;
@@ -37,6 +53,10 @@ void ModelInfo::GenerateGameOfLifeBase(){
             vertexList[i][j].ptr[2] = 10.0f;
             vertexList[i][j].dead = rand()%2!=0;
         }
+    }
+    for(int i=0;i<5;i++){
+        GenerateNextGeneration();
+        MigrateToNext();
     }
 }
 
@@ -150,6 +170,42 @@ void ModelInfo::GenerateNextGeneration(){
                 }
             }
             
+        }
+    }
+}
+
+
+void ModelInfo::ThreadMigrate(int rank){
+    const WorkLoad& load = loads[rank];
+    for(int i=load.start;i<load.end;i++){
+        for(int j=0;j<WORLD_WIDTH;j++){
+            auto& node = vertexList[i][j];
+            
+            if(node.dead){
+                int sur = Surround(i,j);
+                if(sur==3){
+                    nextList[i][j].dead = false;
+                }
+            }
+            else{
+                int sur = Surround(i,j);
+                if(sur<2){
+                    nextList[i][j].dead = true;
+                }
+                else if(sur>3){
+                    nextList[i][j].dead = true;
+                }
+            }
+            
+        }
+    }
+}
+
+void ModelInfo::ThreadGeneration(int rank){
+    const WorkLoad& load = loads[rank];
+    for(int i=load.start;i<load.end;i++){
+        for(int j=0;j<WORLD_WIDTH;j++){
+            vertexList[i][j].dead = nextList[i][j].dead;
         }
     }
 }

@@ -20,7 +20,7 @@
 
 
 #define MIPMAP
-//#define MULTI_THREAD
+#define MULTI_THREAD
 
 using namespace std;
 
@@ -85,6 +85,7 @@ int speed = 40;		// for UBW
 
 int main(int argc, char** argv)
 {
+    thread_count = 0;
 #ifdef MULTI_THREAD
     workload = 1;
 	thread_count = omp_get_num_procs()-1;
@@ -98,7 +99,7 @@ int main(int argc, char** argv)
 		
 		mesh* temp = new mesh(model_name);
 		object.push_back(temp);
-        m_infos.push_back(new ModelInfo(model_name,temp));
+        m_infos.push_back(new ModelInfo(model_name,temp,thread_count));
 	}
 
 #ifdef MULTI_THREAD
@@ -147,25 +148,7 @@ int main(int argc, char** argv)
 
 void display()
 {
-    /*
-#ifdef MULTI_THREAD
-    // reset light triangle
-    for(int i=0;i<m_infos.size();i++){
-        job_list.push_back(i);
-    }
-    for(int i=0;i<thread_count;i++){
-        sem_post(&semaphores[i]);
-    }
-    for(int i=0;i<m_infos.size();i++){
-        sem_wait(&master_sem);
-    }
-#else
-    for(int i=1;i<m_infos.size();i++){
-        modelProcess(i,0);
-    }
 
-#endif
-    */
 
 	// clear the buffer
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);      //²M°£¥Îcolor
@@ -243,30 +226,14 @@ void display()
 #ifdef MULTI_THREAD
 void* monitor(void* v_rank){
     int rank = (int)v_rank;
-    int job;
-    printf("Create:%d\n",rank);
+    printf("Create:%d , \n",rank);
     while(true){
         //printf("rank:%d wait for job...\n",rank);
         sem_wait(&semaphores[rank]);
-        pthread_mutex_lock(&mutex);
-        //printf("*LOCK* Getting jobs...\n");
-        if(job_list.empty()){
-            pthread_mutex_unlock(&mutex);
-        }
-        else{
-            job = job_list.back();
-            job_list.pop_back();
-            pthread_mutex_unlock(&mutex);
-            sem_post(&semaphores[rank]);
-            for(int i=0;i<workload;i++){
-                modelProcess(job,rank);
-            }
-            //    m_infos[job]->CollisionWithMesh(*m_infos[1]);
-            //printf("Finish!\n");
-            sem_post(&master_sem);
-        }
-        
-        
+        // job for this rank
+        m_infos[0]->ThreadGeneration(rank);
+        m_infos[0]->ThreadMigrate(rank);
+        sem_post(&master_sem);
     }
     pthread_exit(NULL);
     return NULL;
@@ -275,8 +242,19 @@ void* monitor(void* v_rank){
 
 void idle(){
     if(move_enable){
+#ifdef MULTI_THREAD
+        for(int i=0;i<thread_count;i++){
+            sem_post(&semaphores[i]);
+        }
+        for(int i=0;i<m_infos.size();i++){
+            sem_wait(&master_sem);
+        }
+#else
         m_infos[0]->GenerateNextGeneration();
         m_infos[0]->MigrateToNext();
+
+#endif
+  
         glutPostRedisplay();
     }
 }

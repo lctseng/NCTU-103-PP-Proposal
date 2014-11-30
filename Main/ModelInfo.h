@@ -26,15 +26,21 @@ struct FaceInfo{
     int draw;
 };
 
+struct WorkLoad{
+    int start,end;
+};
+
 bool isVertexNear(const GLfloat* a,const GLfloat* b);
 bool isTriangleNear(const GLfloat*const* a ,const GLfloat*const* b);
 
 struct ModelInfo{
-    ModelInfo(const string& name,mesh* v_mesh);
+    ModelInfo(const string& name,mesh* v_mesh,int thread_count);
     ~ModelInfo();
     void GenerateGameOfLifeBase();
     void GenerateNextGeneration();
     void MigrateToNext();
+    void ThreadMigrate(int rank);
+    void ThreadGeneration(int rank);
     vector<TriangleInfo> btm_tri;
     vector<FaceInfo> face_draw;
     mesh::Vec3** vertexList;
@@ -56,4 +62,5 @@ struct ModelInfo{
     int Direct8(int i,int j);
     int Direct9(int i,int j);
     int Surround(int i,int j);
+    WorkLoad* loads;
 };
