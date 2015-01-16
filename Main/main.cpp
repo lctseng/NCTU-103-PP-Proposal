@@ -19,8 +19,8 @@
 
 #include "CLInit.h"
 
-const unsigned int WORLD_HEIGHT = 500;
-const unsigned int WORLD_WIDTH = 500;
+const unsigned int WORLD_HEIGHT = 1000;
+const unsigned int WORLD_WIDTH = 1000;
 
 
 #define OPEN_CL
@@ -148,8 +148,8 @@ void initWorld(){
             world[(i*WORLD_WIDTH+j)*3+0] = i*0.1;
             world[(i*WORLD_WIDTH+j)*3+1] = j*0.1;
             world[(i*WORLD_WIDTH+j)*3+2] = 10.0f;
-            color[(i*WORLD_WIDTH+j)*3+0] = 1.0f;
-            color[(i*WORLD_WIDTH+j)*3+1] = 0.5f;
+            color[(i*WORLD_WIDTH+j)*3+0] = 0.0f;
+            color[(i*WORLD_WIDTH+j)*3+1] = 0.0f;
             color[(i*WORLD_WIDTH+j)*3+2] = 0.0f;
             dead[i*WORLD_WIDTH+j] = rand()%2!=0;
 
