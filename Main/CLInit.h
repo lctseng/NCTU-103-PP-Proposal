@@ -160,13 +160,15 @@ IsCLExtensionSupported( const char *extension )
 
 
 void initBuffer(){
+    
     // input data vertex
     cerr << "Creating input data buffer...VERTEX" << endl;
     // fill buffer
-    glGenBuffers( 1, &Vbuf );
     glBindBuffer( GL_ARRAY_BUFFER , Vbuf);
     glBufferData( GL_ARRAY_BUFFER, worldBytes, world,  GL_STATIC_DRAW );
     glBindBuffer( GL_ARRAY_BUFFER , 0);
+    
+    
     // bind to OpenGL
     vert_in = clCreateFromGLBuffer( ctx, 0, Vbuf, &clErrno );
     if(clErrno == CL_SUCCESS){
@@ -176,6 +178,8 @@ void initBuffer(){
         cerr << "Fail to create input data buffer! Errno : " <<  clErrno <<endl;
         exit(1);
     }
+    
+    
     // input data dead
     cerr << "Creating input data buffer...DEAD" << endl;
     dead_in = clCreateBuffer(
@@ -193,15 +197,16 @@ void initBuffer(){
         cerr << "Fail to create command queue! Errno : " <<  clErrno <<endl;
         exit(1);
     }
-
+    
     // output data : color
     cerr << "Creating output data buffer...COLOR" << endl;
     // fill buffer
-    glGenBuffers( 1, &Cbuf );
     glBindBuffer( GL_ARRAY_BUFFER , Cbuf);
     glBufferData( GL_ARRAY_BUFFER, worldBytes, color,  GL_STATIC_DRAW );
     glBindBuffer( GL_ARRAY_BUFFER , 0);
+    
     // bind to OpenGL
+    
     color_out = clCreateFromGLBuffer( ctx, 0, Cbuf, &clErrno );
     if(clErrno == CL_SUCCESS){
         cerr << "Output Memory ID : " << color_out << endl;
@@ -210,7 +215,8 @@ void initBuffer(){
         cerr << "Fail to create output data buffer! Errno : " <<  clErrno <<endl;
         exit(1);
     }
-
+    
+    
 
     // output data dead
     cerr << "Creating output data buffer...DEAD" << endl;
@@ -370,10 +376,25 @@ void setKernel(){
 
 
 void runKernel(){
+    // get GL buffer
+    
+    cl_event ev_acquire;
+    clErrno = clEnqueueAcquireGLObjects( cmdQue, 1, &color_out, 0, NULL, &ev_acquire );
+    if(clErrno == CL_SUCCESS){
+        //cerr << "Acquire GL object Success!" << endl;
+    }
+    else{
+        cerr << "Fail to acquire GL object! Errno : " <<  clErrno <<endl;
+        exit(1);
+    }
+    
+    
+
     // enqueuing kernel
     // global_size
-    size_t globalSize[2] = {WORLD_HEIGHT,WORLD_WIDTH};
     
+    size_t globalSize[2] = {WORLD_HEIGHT,WORLD_WIDTH};
+    size_t localSize[2] = {16,16};
     cl_event ev_compute;
     clErrno = clEnqueueNDRangeKernel(
         cmdQue,
@@ -381,7 +402,7 @@ void runKernel(){
         2, // work dim
         NULL, // work offset
         globalSize,
-        NULL, // local size
+        localSize, // local size
         0, // # of wait for evnet 
         NULL, // event list
         &ev_compute // associated event
@@ -394,20 +415,9 @@ void runKernel(){
         exit(1);
     }
     
-    
     // migrate
-
-    // get GL buffer
-    cl_event ev_acquire;
-    clErrno = clEnqueueAcquireGLObjects( cmdQue, 1, &color_out, 0, NULL, &ev_acquire );
-    if(clErrno == CL_SUCCESS){
-        //cerr << "Acquire GL object Success!" << endl;
-    }
-    else{
-        cerr << "Fail to acquire GL object! Errno : " <<  clErrno <<endl;
-        exit(1);
-    }
     
+
     cl_event ev_migrate;
     
     clErrno = clEnqueueNDRangeKernel(
@@ -416,9 +426,9 @@ void runKernel(){
         2, // work dim
         NULL, // work offset
         globalSize,
-        NULL, // local size
-        1, // # of wait for evnet 
-        &ev_acquire, // event list
+        localSize, // local size
+        0, // # of wait for evnet 
+        NULL, // event list
         &ev_migrate // associated event
       );
     if(clErrno == CL_SUCCESS){
@@ -428,9 +438,11 @@ void runKernel(){
         cerr << "Fail to enqueue kernel Migrate! Errno : " <<  clErrno <<endl;
         exit(1);
     }
+    
     // release
+    
     cl_event ev_release;
-    clErrno = clEnqueueReleaseGLObjects( cmdQue, 1, &color_out, 1, &ev_migrate, &ev_release );
+    clErrno = clEnqueueReleaseGLObjects( cmdQue, 1, &color_out, 0, NULL, &ev_release );
     if(clErrno == CL_SUCCESS){
         //cerr << "Release GL object Success!" << endl;
     }
@@ -438,8 +450,9 @@ void runKernel(){
         cerr << "Fail to release GL object! Errno : " <<  clErrno <<endl;
         exit(1);
     }
+    
 
-    clFinish( cmdQue );
+    
 }
 
 

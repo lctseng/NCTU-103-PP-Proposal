@@ -19,11 +19,12 @@
 
 #include "CLInit.h"
 
-const unsigned int WORLD_HEIGHT = 1000;
-const unsigned int WORLD_WIDTH = 1000;
+const unsigned int WORLD_HEIGHT = 2048;
+const unsigned int WORLD_WIDTH = 2048;
 
 
 #define OPEN_CL
+//#define MULTI_THREAD
 using namespace std;
 
 views* viewing;
@@ -74,12 +75,15 @@ void reshape(GLsizei , GLsizei );
 /* GOL */
 GLfloat* world;
 GLbyte* dead;
+GLbyte* nextDead;
 GLfloat* color;
 unsigned int worldSize;
 unsigned int worldBytes;
 void initWorld();
 void MigrateToNext();
 void GenerateNextGeneration();
+void redraw();
+void copyToDisplayBuffer();
 
 int main(int argc, char** argv)
 {
@@ -120,20 +124,30 @@ int main(int argc, char** argv)
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
     glEnable(GL_COLOR_MATERIAL);
     //buffer
+    glGenBuffers( 1, &Vbuf );
+    glGenBuffers( 1, &Cbuf );
+    glPointSize( 2. );
     
-    //glPointSize( 2. );
-    
-#ifdef OPEN_CL
+#if defined (OPEN_CL)
     initDevice();
     initBuffer();
     loadCLProgram();
     setKernel();
+#else
+    glBindBuffer( GL_ARRAY_BUFFER , Vbuf);
+    glBufferData( GL_ARRAY_BUFFER, worldBytes, world,  GL_STATIC_DRAW );
+    glBindBuffer( GL_ARRAY_BUFFER , 0);
+    glBindBuffer( GL_ARRAY_BUFFER , Cbuf);
+    glBufferData( GL_ARRAY_BUFFER, worldBytes, color,  GL_STATIC_DRAW );
+    glBindBuffer( GL_ARRAY_BUFFER , 0);
 #endif
 
+    redraw();
 	glutMainLoop();
     delete[] world;
     delete[] dead;
     delete[] color;
+    delete[] nextDead;
 	return 0;
 }
 
@@ -143,14 +157,15 @@ void initWorld(){
     world = new GLfloat[worldSize*3];
     color = new GLfloat[worldSize*3];
     dead = new GLbyte[worldSize];
+    nextDead = new GLbyte[worldSize];
     for(int i=0;i<WORLD_HEIGHT;i++){
         for(int j=0;j<WORLD_WIDTH;j++){
             world[(i*WORLD_WIDTH+j)*3+0] = i*0.1;
             world[(i*WORLD_WIDTH+j)*3+1] = j*0.1;
             world[(i*WORLD_WIDTH+j)*3+2] = 10.0f;
-            color[(i*WORLD_WIDTH+j)*3+0] = 0.0f;
-            color[(i*WORLD_WIDTH+j)*3+1] = 0.0f;
-            color[(i*WORLD_WIDTH+j)*3+2] = 0.0f;
+            color[(i*WORLD_WIDTH+j)*3+0] = 0.2f;
+            color[(i*WORLD_WIDTH+j)*3+1] = 0.2f;
+            color[(i*WORLD_WIDTH+j)*3+2] = 0.2f;
             dead[i*WORLD_WIDTH+j] = rand()%2!=0;
 
         }
@@ -205,7 +220,7 @@ void display()
 
     
     
-    runKernel();
+    
     
     glBindBuffer( GL_ARRAY_BUFFER , Vbuf);
     glVertexPointer( 3, GL_FLOAT, 0, (void *)0 );
@@ -221,28 +236,137 @@ void display()
     glDisableClientState( GL_COLOR_ARRAY );
     glBindBuffer( GL_ARRAY_BUFFER , 0);
     
+    
 	glutSwapBuffers();
-    glFlush();
 }
-
-
 
 void idle(){
     if(move_enable){
-        GenerateNextGeneration();
-        MigrateToNext();
+        redraw();
         glutPostRedisplay();
-        
     }
-    
 }
 
-/*
+void redraw(){
+#if defined (OPEN_CL)
+    runKernel();
+#else // on CPU
+#if defined (MULTI_THREAD)
+
+#else
+    GenerateNextGeneration();
+    MigrateToNext();
+#endif
+    copyToDisplayBuffer();
+#endif
+}
+
+void copyToDisplayBuffer(){
+    glBindBuffer( GL_ARRAY_BUFFER , Cbuf);
+    glBufferData( GL_ARRAY_BUFFER, worldBytes, color,  GL_STATIC_DRAW );
+    glBindBuffer( GL_ARRAY_BUFFER , 0);
+}
+
+
+inline bool checkRange(int x,int y){
+    return x>=0&&x<WORLD_HEIGHT&&y>=0&&y<WORLD_WIDTH;
+}
+
+int Direct1(int i,int j){
+    int x = i-1, y = j+1;
+    if(!checkRange(x,y)||dead[x*WORLD_WIDTH+y]){
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+int Direct2(int i,int j){
+    int x = i,y = j+1;
+    if(!checkRange(x,y)||dead[x*WORLD_WIDTH+y]){
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+int Direct3(int i,int j){
+    int x = i+1,y = j+1;
+    if(!checkRange(x,y)||dead[x*WORLD_WIDTH+y]){
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+int Direct4(int i,int j){
+    int x = i-1, y = j;
+    if(!checkRange(x,y)||dead[x*WORLD_WIDTH+y]){
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+int Direct6(int i,int j){
+    int x = i+1, y = j;
+    if(!checkRange(x,y)||dead[x*WORLD_WIDTH+y]){
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+int Direct7(int i,int j){
+    int x = i-1, y = j-1;
+    if(!checkRange(x,y)||dead[x*WORLD_WIDTH+y]){
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+int Direct8(int i,int j){
+    int x = i,y = j-1;
+    if(!checkRange(x,y)||dead[x*WORLD_WIDTH+y]){
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+int Direct9(int i,int j){
+    int x = i+1,y = j-1;
+    if(!checkRange(x,y)||dead[x*WORLD_WIDTH+y]){
+        return 0;
+    }
+    else{
+        return 1;
+    }
+}
+
+int Surround(int i,int j){
+    return Direct2(i,j)+Direct4(i,j)+Direct6(i,j)+Direct8(i,j)+Direct1(i,j)+Direct3(i,j)+Direct7(i,j)+Direct9(i,j);
+}
 
 void MigrateToNext(){
     for(int i=0;i<WORLD_HEIGHT;i++){
         for(int j=0;j<WORLD_WIDTH;j++){
-            vertexList[i][j].dead = nextList[i][j].dead;
+            int index = i*WORLD_WIDTH+j;
+            dead[index] = nextDead[index];
+            int pts = index * 3;
+            int ptsp1 = pts + 1;
+            int ptsp2 = pts + 2;
+            if(nextDead[index]){
+                 color[pts] = 0.1f;
+                 color[ptsp1] = 0.1f;
+                 color[ptsp2] = 0.1f;
+            }
+            else{
+                color[pts] = 1.0f;
+                color[ptsp1] = 0.5f;
+                color[ptsp2] = 0.0f;
+            }
         }
     }
 }
@@ -250,31 +374,26 @@ void MigrateToNext(){
 void GenerateNextGeneration(){
     for(int i=0;i<WORLD_HEIGHT;i++){
         for(int j=0;j<WORLD_WIDTH;j++){
-            auto& node = vertexList[i][j];
+            int index = i*WORLD_WIDTH+j;
             
-            if(node.dead){
+            if(dead[index]){
                 int sur = Surround(i,j);
                 if(sur==3){
-                    nextList[i][j].dead = false;
+                    nextDead[index] = 0;
                 }
             }
             else{
                 int sur = Surround(i,j);
-                if(sur<2){
-                    nextList[i][j].dead = true;
-                }
-                else if(sur>3){
-                    nextList[i][j].dead = true;
+                if(sur<2 || sur > 3){
+                    nextDead[index] = 1;
                 }
             }
             
         }
     }
 }
-*/
 
-void MigrateToNext(){}
-void GenerateNextGeneration(){}
+
 
 void light(bool only_ambient)
 {	
@@ -363,8 +482,7 @@ void keyboard(unsigned char key, int x, int y)
 		//select = 3;
 		break;
 	case 'z':    // Migrate
-        GenerateNextGeneration();
-        MigrateToNext();
+        redraw();
         break;
     case 'x':
         move_enable = !move_enable;
